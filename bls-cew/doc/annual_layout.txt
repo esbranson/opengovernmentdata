@@ -1,0 +1,88 @@
+annual_layout.txt                                                   Revised June 28, 2012                                  
+Covers: QCEW CSV files (BETA)
+Folder: ftp://ftp.bls.gov/pub/special.requests/cew/beta/
+
+
+-- Annual Data Layout --
+
+Annual data are stored in CSV files. Three archives contain
+annual data and are only present if an entire year's worth of
+data are available. For Example, annual data for 2001 are stored
+in the following archives:
+    
+
+    2001.annual.by_area.zip
+    2001.annual.by_industry.zip
+    2001.annual.singlefile.zip
+
+Note: 
+1) Annual archives are only present if an entire year's data are available.
+2) The single file does not contain title fields (9 through 13).
+
+
+Field names and short descriptions can be found below:
+
+
+Field       Field                   Data        Max         Description
+Number      Name                    Type        Length
+
+1           area_fips               Text        5           5-character FIPS code   
+
+2           own_code                Numeric     1           1-digit Ownership code          
+
+3           industry_code           Text        6           6-character Industry Code (NAICS, SuperSector)
+
+4           agglvl_code             Numeric     2           2-digit aggregation level code
+
+5           size_code               Numeric     1           1-digit size code (See size map)
+
+6           year                    Numeric     4           4-digit year
+
+7           qtr                     Text        1           1-character quarter (always A for annual)
+
+8           disclosure_code         Text        1           1-character disclosure code (either " "(blank) 
+                                                            or "N" not disclosed)
+                                                            
+9       *   area_title              Text        55          Multi-character area title associated with 
+                                                            the area's FIPS. The longest title is currently
+                                                            55 characters in length.
+                                                            
+10      *   own_title               Text        48          Multi-character ownership title associated with
+                                                            the ownership code. The longest title is currently
+                                                            48 characters in length.
+                                                            
+11      *   industry_title          Text        58          Multi-character industry title associated with
+                                                            the industry code. The longest title is currently 
+                                                            58 characters in length.
+                                                            
+12      *   agglvl_title            Text        62          Multi-character aggregation title associated
+                                                            with the agglvl code. The longest title is 
+                                                            currently 62 characters in length.
+                                                            
+13      *   size_title              Text        40          Multi-character size title associated with the 
+                                                            size code. The longest title is currently 40 
+                                                            characters in length.
+                                                            
+14          annual_avg_estabs_count Numeric     8           Annual average of quarterly establishment counts
+                                                            for a given year (Max 8 digits)
+                                                            
+15          annual_avg_emplvl       Numeric     9           Annual average of monthly employment levels for
+                                                            a given year (Max 9 digits)
+                                                            
+16          total_annual_wages      Numeric     15          Sum of the four quarterly total wage levels for 
+                                                            a given year (Max 15 digits)
+                                                            
+17          taxable_annual_wages    Numeric     15          Sum of the four quarterly total taxable wage
+                                                            totals for a given year (Max 15 digits)
+                                                            
+18          annual_contributions    Numeric     13          Sum of the four quarterly contribution totals
+                                                            for a given year (Max 13 digits)
+                                                            
+19          annual_avg_wkly_wage    Numeric     8           Average weekly wage based on the 12-monthly 
+                                                            employment levels and total annual wage levels.
+                                                            (Max 8 digits)
+                                                            
+20          avg_annual_pay          Numeric     8           Average annual pay based on employment and wage
+                                                            levels for a given year. (Max 8 digits)
+
+* Fields are not present in singlefile.
