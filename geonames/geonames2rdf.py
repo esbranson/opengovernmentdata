@@ -1,14 +1,27 @@
-#!/usr/bin/python3 -uW all
+#!/usr/bin/python3 -u
 
-# http://geonames.usgs.gov/domestic/download_data.htm
+usage="""
+geonames2rdf - convert the US BGN "federal codes" dataset into RDF
+
+See <http://geonames.usgs.gov/domestic/download_data.htm> under "Topical
+Gazetteers/Government Units" and "State Files with Federal Codes".
+
+Usage:  geonames2rdf [options] GOVT_UNITS_*.txt NationalFedCodes_*.txt [output]
+Arguments:
+
+	-d			enable debugging
+	-f fmt		use format for output file (see RDFLib documentation)
+	output		output file (default: stdout)
+"""
 
 import csv
 import rdflib
+import sys
+import getopt
+import logging
 
-gnis_ns = rdflib.Namespace("http://data.example.com/usgs.gov/data/gnis#")
-#gnis_ns = rdflib.Namespace("http://geonames.usgs.gov/pls/gnispublic/f?p=gnispq:3:::NO::P3_FID:")
-gnisgeo_ns = rdflib.Namespace('http://data.example.com/usgs.gov/data/geom#')
-gnisonto_ns = rdflib.Namespace('http://data.example.com/usgs.gov/onto/geonames#')
+gnis_ns = rdflib.Namespace("http://data.usgs.gov/id/gnis/")
+gnisonto_ns = rdflib.Namespace('http://data.usgs.gov/ont/gnis#')
 geo_ns = rdflib.Namespace('http://www.opengis.net/ont/geosparql#')
 
 geofeat = geo_ns['Feature']
@@ -17,139 +30,140 @@ geogeom = geo_ns['Geometry']
 geoaswkt = geo_ns['asWKT']
 geowkt = geo_ns['wktLiteral']
 geowithin = geo_ns['sfWithin']
-gnisfeat = gnisonto_ns['GeonameFeature']
-gnisname = gnisonto_ns['name']
-gnisfid = gnisonto_ns['fid']
-gnisfips55plc = gnisonto_ns['fips55place']
-gnisfips55cls = gnisonto_ns['fips55class']
-gnisfips5_2n = gnisonto_ns['fips5-2num']
-gnisfips5_2a = gnisonto_ns['fips5-2alpha']
-gnisfips6_4 = gnisonto_ns['fips6-4']
-gnisgsa = gnisonto_ns['gsa']
-gnisopm = gnisonto_ns['opm']
+gnisfeat = gnisonto_ns['Feature']
+gnisname = gnisonto_ns['featureName']
+gnisfid = gnisonto_ns['featureID']
+gniscls = gnisonto_ns['featureClass']
+gnisfips55plc = gnisonto_ns['censusPlace']
+gnisfips55cls = gnisonto_ns['censusClass']
+gnisfips5_2n = gnisonto_ns['stateNumeric']
+gnisfips5_2a = gnisonto_ns['stateAlpha']
+gnisfips6_4 = gnisonto_ns['countyNumeric']
+gnisgsa = gnisonto_ns['gsaLocation']
+gnisopm = gnisonto_ns['opmLocation']
 
-def graph_init():
+##
+# Driver function. Create FIPS-to-GNISID map, then create feature RDF graph,
+# then save graph.
+#
+def main():
+	outf = sys.stdout.buffer
+	outfmt = 'turtle'
+	debuglvl = logging.INFO
+
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], 'df:')
+	except getopt.GetoptError as e:
+		logging.fatal('getopt error {}'.format(e))
+		return 1
+
+	if len(args) < 2:
+		logging.fatal('need input files')
+		return 1
+	for opt, arg in opts:
+		if opt in {'-d', '--debug'}:
+			debuglvl = logging.DEBUG
+		elif opt in {'-f', '--format'}:
+			outfmt = arg
+		else:
+			logging.fatal('invalid flag {}'.format(opt))
+			return 1
+
+	govfn = args[0] # GOVT_UNITS_*.txt
+	codesfn = args[1] # NationalFedCodes_*.txt
+	if len(args) >= 3:
+		outf = args[2]
+	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
+
+	logging.info("Building FIPSMap")
+	m = FIPSMap()
+	with open(govfn) as f:
+		convert_fips2gnis(f, m)
+	logging.info("Building RDF")
+
 	g = rdflib.Graph()
+	g.bind('gnis', gnisonto_ns)
 	g.bind('geo', geo_ns)
-	g.bind('geonames-onto', gnisonto_ns)
-	g.bind('geonames', gnisgeo_ns)
-	return g
+	with open(codesfn) as f:
+		convert_fedcodes(g, f, m)
 
-def convert_fips2gnis(infn):
-	f = open(infn)
+	logging.info("Saving RDF")
+	g.serialize(outf, format=outfmt)
+
+##
+# A map ("STATE|COUNTY", FIPS state numeric, FIPS county numeric) => GNIS ID.
+#
+class FIPSMap:
+	def __init__(self):
+		self.m = {}
+	def add(self, gnisid, fips_sn, fips_cn=''):
+		self.m[(fips_sn, fips_cn)] = gnisid
+	def get(self, fips_sn, fips_cn=''):
+		return (fips_sn, fips_cn) in self.m and self.m[(fips_sn, fips_cn)] or None
+
+##
+# Use BGN "Government Units" file to pre-build map of state/county
+# FIPS codes -> GNIS IDs.
+#
+# @input f: The BGN "Government Units" file.
+# @input m: A FIPSMap.
+#
+def convert_fips2gnis(f, m):
 	csv_reader = csv.reader(f, delimiter='|')
-	g = graph_init()
-
-	# skip header
 	next(csv_reader)
-
-	# parse
-	gnmap = {}
 	for row in csv_reader:
-		fid = row[0]
-		typ = row[1]
-		fips_c = row[2]
-		fips_sn = row[4]
-		fips_sa = row[5]
-		fips_s_name = row[6]
-		fips_s_lname = row[9]
-#		print('gnmap', gnis, typ, fips_s, fips_c)
-		gnmap[(typ,fips_sn,fips_c)] = fid
-		if typ == 'STATE':
-			furl = gnis_ns[fid]
-			g.add((furl, rdflib.RDF.type, gnisfeat))
-#			g.add((furl, rdflib.RDF.type, geofeat)) # XXX make implied through entailment?
-			g.add((furl, rdflib.RDFS.label, rdflib.Literal(fips_s_name)))
-			g.add((furl, gnisname, rdflib.Literal(fips_s_lname, datatype=rdflib.XSD.string)))
-			g.add((furl, gnisfid, rdflib.Literal(fid, datatype=rdflib.XSD.string)))
-			g.add((furl, gnisfips5_2a, rdflib.Literal(fips_sa, datatype=rdflib.XSD.string)))
-			g.add((furl, gnisfips5_2n, rdflib.Literal(fips_sn, datatype=rdflib.XSD.string)))
+		m.add(row[0], row[4], row[2])
 
-	f.close()
-
-	return g, gnmap
-
-# give 2 digit state + 3 digit county fips, return gnis
-def search_fips2gnis_county(gnmap, fips_s, fips_c):
-	return gnmap[('COUNTY', fips_s, fips_c)] # XXX KeyError
-
-# give 2 digit state fips, return gnis
-def search_fips2gnis_state(gnmap, fips_s):
-	return gnmap[('STATE', fips_s, '')] # XXX KeyError
-
-def convert_fedcodes(g, f2g, infn, outfn, fmt='turtle'):
-	f = open(infn)
+##
+# Convert BGN "State Files with Federal Codes" file to RDF.
+#
+# @input g: An RDFLib Graph.
+# @input f: The BGN "Government Units" file.
+# @input m: A FIPSMap.
+#
+def convert_fedcodes(g, f, m):
 	csv_reader = csv.reader(f, delimiter='|')
-
-	# skip headers
 	next(csv_reader)
 
-	# convert
-#	g = graph_init()
 	for n,row in enumerate(csv_reader, 1):
-		fid = row[0]
-		name = row[1]
-		cls = row[2] # http://geonames.usgs.gov/pls/gnispublic/f?p=gnispq:8:4151779970585687
-		fips55plc = row[3]
-		fips55cls = row[4] # http://geonames.usgs.gov/pls/gnispublic/f?p=gnispq:6:447020433485622
-		gsa = row[5]
-		opm = row[6]
-		fips5_2n = row[7]
-		fips5_2a = row[8]
-		seq = row[9]
-		fips6_4 = row[10]
-		# county_name = row[11]
-		prim_lat = row[12] # Decimal degrees, NAD 83
-		prim_long = row[13] # Decimal degrees, NAD 83
-
-		if cls not in {'Civil', 'Census', 'Populated Place'}:
+		if row[2] not in {'Civil', 'Census', 'Populated Place'}:
 			continue
 
-		furl = gnis_ns[fid]
-#		gurl = gnisgeo_ns['geoname_'+fid+'_geom']
-		wkt = 'POINT ('+prim_long+' '+prim_lat+')'
+		url = gnis_ns[row[0]]
+		g.add((url, rdflib.RDF.type, gnisfeat))
+		g.add((url, rdflib.RDF.type, geofeat))
+		g.add((url, gnisfid, rdflib.Literal(row[0], datatype=rdflib.XSD.string)))
+		g.add((url, rdflib.RDFS.label, rdflib.Literal(row[1]))) # XXX: In English?
+		g.add((url, gnisname, rdflib.Literal(row[1], datatype=rdflib.XSD.string)))
+		g.add((url, gniscls, rdflib.Literal(row[2], datatype=rdflib.XSD.string)))
 
-#		print(fid,fips55cls,repr(wkt),name)
+		if len(row[3]):
+			g.add((url, gnisfips55plc, rdflib.Literal(row[3], datatype=rdflib.XSD.string)))
+		if len(row[4]):
+			g.add((url, gnisfips55cls, rdflib.Literal(row[4], datatype=rdflib.XSD.string)))
+		if len(row[5]):
+			g.add((url, gnisgsa, rdflib.Literal(row[5], datatype=rdflib.XSD.string)))
+		if len(row[6]):
+			g.add((url, gnisopm, rdflib.Literal(row[6], datatype=rdflib.XSD.string)))
 
-		g.add((furl, rdflib.RDF.type, gnisfeat))
-#		g.add((furl, rdflib.RDF.type, geofeat)) # XXX make implied through entailment?
-		g.add((furl, rdflib.RDFS.label, rdflib.Literal(name)))
-		g.add((furl, gnisname, rdflib.Literal(name, datatype=rdflib.XSD.string)))
-		g.add((furl, gnisfid, rdflib.Literal(fid, datatype=rdflib.XSD.string)))
-		if len(fips55plc):
-			g.add((furl, gnisfips55plc, rdflib.Literal(fips55plc, datatype=rdflib.XSD.string)))
-		if len(fips55cls):
-			g.add((furl, gnisfips55cls, rdflib.Literal(fips55cls, datatype=rdflib.XSD.string)))
-		if len(gsa):
-			g.add((furl, gnisgsa, rdflib.Literal(gsa, datatype=rdflib.XSD.string)))
-		if len(opm):
-			g.add((furl, gnisopm, rdflib.Literal(opm, datatype=rdflib.XSD.string)))
-		if len(fips55cls) and (fips55cls[0] == 'H' or fips55cls == 'C7'): # if its a county or not within a county
-			state_gnis = search_fips2gnis_state(f2g, fips5_2n)
-			g.add((furl, geowithin, gnis_ns[state_gnis]))
-			if len(fips6_4):
-				g.add((furl, gnisfips6_4, rdflib.Literal(fips6_4, datatype=rdflib.XSD.string)))
+		# If its a county or not within a county, link to encompassing state
+		# otherwise link to county.
+		if len(row[4]) and (row[4][0] == 'H' or row[4] == 'C7'):
+			state_gnis = m.get(row[7])
+			g.add((url, geowithin, gnis_ns[state_gnis]))
+			if len(row[10]):
+				g.add((url, gnisfips6_4, rdflib.Literal(row[10], datatype=rdflib.XSD.string)))
 		else:
-			county_gnis = search_fips2gnis_county(f2g, fips5_2n, fips6_4)
-			g.add((furl, geowithin, gnis_ns[county_gnis]))
+			county_gnis = m.get(row[7], row[10])
+			g.add((url, geowithin, gnis_ns[county_gnis]))
 
-#		g.add((furl, geohasgeom, gurl))
-#
-#		g.add((gurl, rdflib.RDF.type, geogeom))
-#		g.add((gurl, geoaswkt, rdflib.Literal(wkt, datatype=geowkt)))
+		# XXX: Get geometries from US Census Bureau.
+		#g.add((furl, geohasgeom, gurl))
+		#g.add((gurl, rdflib.RDF.type, geogeom))
+		#g.add((gurl, geoaswkt, rdflib.Literal('POINT ('+row[13]+' '+row[12]+')', datatype=geowkt)))
 
-		if n % 1000 == 0:
-			print('processed', n)
-
-	f.close()
-
-	f = open(outfn, 'xb')
-	g.serialize(f, format=fmt)
-	f.close()
-
-def main():
-	g, f2g = convert_fips2gnis('raw/GOVT_UNITS_20130602.txt')
-	convert_fedcodes(g, f2g, 'raw/NationalFedCodes_20130602.txt', 'out/fedcodes_20130602.ttl', 'turtle')
+		if n % 10000 == 0:
+			logging.debug("Processed {0}".format(n))
 
 if __name__ == '__main__':
 	main()
