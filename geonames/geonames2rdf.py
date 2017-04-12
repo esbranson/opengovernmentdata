@@ -114,6 +114,16 @@ def convert_fips2gnis(f, m):
 	for row in csv_reader:
 		m.add(row[0], row[4], row[2])
 
+		if row[1] == 'STATE':
+			url = gnis_ns[row[0]]
+			g.add((url, rdflib.RDF.type, gnisfeat))
+			g.add((url, rdflib.RDF.type, geofeat))
+			g.add((url, gnisfid, rdflib.Literal(row[0], datatype=rdflib.XSD.string)))
+			g.add((url, rdflib.RDFS.label, rdflib.Literal(row[6]))) # XXX: In English?
+			g.add((url, gnisname, rdflib.Literal(row[9], datatype=rdflib.XSD.string)))
+			g.add((url, gnisfips5_2n, rdflib.Literal(row[4], datatype=rdflib.XSD.string)))
+			g.add((url, gnisfips5_2a, rdflib.Literal(row[5], datatype=rdflib.XSD.string)))
+
 ##
 # Convert BGN "State Files with Federal Codes" file to RDF.
 #
