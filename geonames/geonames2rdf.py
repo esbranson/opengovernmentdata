@@ -76,14 +76,14 @@ def main():
 	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
+	g = rdflib.Graph()
+	g.bind('gnis-ont', gnisonto_ns)
+	g.bind('geo', geo_ns)
 	m = FIPSMap()
 	with open(govfn) as f:
-		convert_fips2gnis(f, m)
-	logging.info("Building RDF")
+		convert_fips2gnis(g, f, m)
 
-	g = rdflib.Graph()
-	g.bind('gnis', gnisonto_ns)
-	g.bind('geo', geo_ns)
+	logging.info("Building RDF")
 	with open(codesfn) as f:
 		convert_fedcodes(g, f, m)
 
@@ -108,7 +108,7 @@ class FIPSMap:
 # @input f: The BGN "Government Units" file.
 # @input m: A FIPSMap.
 #
-def convert_fips2gnis(f, m):
+def convert_fips2gnis(g, f, m):
 	csv_reader = csv.reader(f, delimiter='|')
 	next(csv_reader)
 	for row in csv_reader:
