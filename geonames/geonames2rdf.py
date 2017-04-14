@@ -1,5 +1,9 @@
 #!/usr/bin/python3 -u
 
+##
+# geonames2rdf - convert the US BGN "federal codes" dataset into RDF
+#
+
 usage="""
 geonames2rdf - convert the US BGN "federal codes" dataset into RDF
 
@@ -91,7 +95,7 @@ def main():
 	g.serialize(outf, format=outfmt)
 
 ##
-# A map ("STATE|COUNTY", FIPS state numeric, FIPS county numeric) => GNIS ID.
+# A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
 #
 class FIPSMap:
 	def __init__(self):
@@ -103,7 +107,8 @@ class FIPSMap:
 
 ##
 # Use BGN "Government Units" file to pre-build map of state/county
-# FIPS codes -> GNIS IDs.
+# FIPS codes -> GNIS IDs. Also add states to graph because they aren't included
+# in the NationalFedCodes_*.txt file.
 #
 # @input f: The BGN "Government Units" file.
 # @input m: A FIPSMap.
@@ -156,13 +161,12 @@ def convert_fedcodes(g, f, m):
 		if len(row[6]):
 			g.add((url, gnisopm, rdflib.Literal(row[6], datatype=rdflib.XSD.string)))
 
-		# If its a county or not within a county, link to encompassing state
+		# If its a county equivalent, use county properties and link to encompassing state,
 		# otherwise link to county.
 		if len(row[4]) and (row[4][0] == 'H' or row[4] == 'C7'):
 			state_gnis = m.get(row[7])
 			g.add((url, geowithin, gnis_ns[state_gnis]))
-			if len(row[10]):
-				g.add((url, gnisfips6_4, rdflib.Literal(row[10], datatype=rdflib.XSD.string)))
+			g.add((url, gnisfips6_4, rdflib.Literal(row[10], datatype=rdflib.XSD.string)))
 		else:
 			county_gnis = m.get(row[7], row[10])
 			g.add((url, geowithin, gnis_ns[county_gnis]))

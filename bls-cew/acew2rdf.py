@@ -63,7 +63,7 @@ dtnni = rdflib.XSD.nonNegativeInteger
 #dti = rdflib.XSD.integer
 
 ##
-# Driver function. Create FIPS-to-GNISID map, then create feature RDF graph,
+# Driver function. Create FIPS-to-GNISID map, then create RDF data cube graph,
 # then save graph.
 #
 def main():
@@ -99,8 +99,8 @@ def main():
 	m = FIPSMap()
 	with open(govfn) as f:
 		convert_fips2gnis(f, m)
-	logging.info("Building RDF")
 
+	logging.info("Building RDF")
 	with open(codesfn) as f, tempfile.TemporaryDirectory() as tmpdn:
 		g = rdflib.Graph(rdflib.plugins.sleepycat.Sleepycat(tmpdn))
 		g.bind('qb', qb)
@@ -109,7 +109,7 @@ def main():
 		g.bind('sdmx-attribute', sdmx_attribute)
 		g.bind('sdmx-code', sdmx_code)
 		g.bind('cew', bls_cew)
-		g.bind('cew-onto', bls_cew_onto)
+		g.bind('cew-ont', bls_cew_onto)
 		g.bind('gnis', usgs_gnis)
 		g.bind('naics-ind', naics_ind)
 		g.bind('naics-own', naics_own)
@@ -184,7 +184,6 @@ def convert_acew(g, f, m):
 	next(csv_reader)
 
 	for n,row in enumerate(csv_reader, 1):
-		# XXX strip quotes
 		fips_code = row[0]
 		owner_code = row[1]
 		industry_code = row[2]
