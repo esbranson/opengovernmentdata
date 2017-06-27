@@ -98,14 +98,12 @@ def main():
 	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
-	gnism = FIPSMap()
 	with open(govfn) as f:
-		convert_fips2gnis(f, gnism)
+		gnism = FIPSMap(f)
 
 	logging.info("Building IndustryMap")
-	indm = IndustryMap()
 	with open(indfn) as f:
-		convert_ind2ind(f, indm)
+		indm = IndustryMap(f)
 
 	logging.info("Building RDF")
 	with open(datafn) as f, tempfile.TemporaryDirectory() as tmpdn:
@@ -131,70 +129,64 @@ def main():
 # A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
 #
 class FIPSMap:
-	def __init__(self):
+	##
+	# Use BGN "Government Units" file to pre-build map of state/county
+	# FIPS codes -> GNIS IDs.
+	#
+	# @input f: The BGN "Government Units" file.
+	#
+	def __init__(self, f):
 		self.m = {}
+		csv_reader = csv.reader(f, delimiter='|')
+		next(csv_reader)
+		for row in csv_reader:
+			self.add(row[0], row[4], row[2])
 	def add(self, gnisid, fips_sn, fips_cn=''):
 		self.m[(fips_sn, fips_cn)] = gnisid
 	def get(self, fips_sn, fips_cn=''):
 		return (fips_sn, fips_cn) in self.m and self.m[(fips_sn, fips_cn)] or None
 
 ##
-# Use BGN "Government Units" file to pre-build map of state/county
-# FIPS codes -> GNIS IDs.
-#
-# @input f: The BGN "Government Units" file.
-# @input m: A FIPSMap.
-#
-def convert_fips2gnis(f, m):
-	csv_reader = csv.reader(f, delimiter='|')
-	next(csv_reader)
-	for row in csv_reader:
-		m.add(row[0], row[4], row[2])
-
-##
 # A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
 #
 class IndustryMap:
-	def __init__(self):
+	##
+	# Use oe.industry file to pre-build map of industry codes to -> NAICS codes.
+	#
+	# TODO: Deal with the national level with ownership codes.
+	#
+	# @input f: The oe.industry file.
+	#
+	def __init__(self, f):
 		self.m = {}
+		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
+		next(csv_reader)
+		for row in csv_reader:
+			code = row[0].strip()
+			lvl = int(row[2].strip())
+			if code == '000000':
+				ind = '0'
+				own = '0'
+			elif code == '000001':
+				ind = '0'
+				own = '5'
+			elif '-' in code:
+				ind = code[0:2]
+				if ind == '31':
+					ind = '31-33'
+				elif ind == '44':
+					ind = '44-45'
+				elif ind == '48':
+					ind = '48-49'
+				own = '0'
+			else:
+				ind = code[0:lvl]
+				own = '0'
+			self.add((ind,own), code)
 	def add(self, naics, code):
 		self.m[code] = naics
 	def get(self, code):
 		return code in self.m and self.m[code] or None
-
-##
-# Use oe.industry file to pre-build map of industry codes to -> NAICS codes.
-#
-# TODO: Deal with the national level with ownership codes.
-#
-# @input f: The oe.industry file.
-# @input m: An IndustryMap.
-#
-def convert_ind2ind(f, m):
-	csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
-	next(csv_reader)
-	for row in csv_reader:
-		code = row[0].strip()
-		lvl = int(row[2].strip())
-		if code == '000000':
-			ind = '0'
-			own = '0'
-		elif code == '000001':
-			ind = '0'
-			own = '5'
-		elif '-' in code:
-			ind = code[0:2]
-			if ind == '31':
-				ind = '31-33'
-			elif ind == '44':
-				ind = '44-45'
-			elif ind == '48':
-				ind = '48-49'
-			own = '0'
-		else:
-			ind = code[0:lvl]
-			own = '0'
-		m.add((ind,own), code)
 
 ##
 #
