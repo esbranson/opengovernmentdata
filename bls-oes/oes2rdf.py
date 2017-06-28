@@ -7,7 +7,7 @@
 usage="""
 oes2rdf - convert the US BLS Occupational Employment Statistics dataset into RDF
 
-See <https://www.bls.gov/oes/>.
+Requires python3-rdfllib and python3-bsddb3. See <https://www.bls.gov/oes/>.
 
 Usage:  oes2rdf [options] oe.data.* oe.industry GOVT_UNITS_*.txt
 Arguments:
@@ -106,21 +106,9 @@ def main():
 		indm = IndustryMap(f)
 
 	logging.info("Building RDF")
-	with open(datafn) as f, tempfile.TemporaryDirectory() as tmpdn:
-		g = rdflib.Graph(rdflib.plugins.sleepycat.Sleepycat(tmpdn))
-		g.bind('oes', oes)
-		g.bind('oes-ont', oes_onto)
-		g.bind('gnis', gnis)
-		g.bind('cbsa', cbsa)
-		g.bind('naics-ind', naics_ind)
-		g.bind('naics-own', naics_own)
-		g.bind('soc', soc)
-		g.bind('qb', qb)
-		g.bind('sdmx-dimension', sdmx_dimension)
-		g.bind('sdmx-measure', sdmx_measure)
-		g.bind('sdmx-attribute', sdmx_attribute)
-		g.bind('sdmx-code', sdmx_code)
-		convert_oes(g, f, gnism, indm)
+	g = OESGraph()
+	with open(datafn) as f:
+		g.build(f, gnism, indm)
 
 	logging.info("Saving RDF")
 	g.serialize(outf, format=outfmt)
@@ -191,111 +179,144 @@ class IndustryMap:
 ##
 #
 #
-def parse_industry(s, m):
-	ret = m.get(s)
-	if ret is None:
-		return None,None
-	ind,own = ret
-	return naics_ind[ind], naics_own[own]
-
-##
-# Return SOC url.
-#
-def parse_occupation(s):
-	frag = s[0:2] + '-' + s[2:6]
-	return soc[frag]
-
-##
-# Parse the series_id field. Return None if we should skip record.
-#
-# TODO: don't skip nonmetropolitan areas
-#
-def parse_series(s, gnism, indm):
-	survey = s[0:2]
-	seasonal = s[2:3]
-	areatye = s[3:4]
-	area = s[4:11]
-	industry = s[11:17]
-	occupation = s[17:23]
-	datatype = s[23:25]
-
-	assert survey == 'OE'
-	if datatype not in {'01','02', '04', '05', '13'}:
-		#logging.debug("parse_series: skipping record: datatype {0}".format(datatype))
-		return (None,)*5
-
-	if area == '0000000':
-		areaurl = gnis['1890467']
-	elif area[0:2] != '00' and area[2:7] == '00000':
-		ret = gnism.get(area[0:2])
+class OESGraph:
+	##
+	#
+	#
+	def __init__(self):
+		with tempfile.TemporaryDirectory() as tmpdn:
+			g = rdflib.Graph(rdflib.plugins.sleepycat.Sleepycat(tmpdn))
+		self.g = g
+		g.bind('oes', oes)
+		g.bind('oes-ont', oes_onto)
+		g.bind('gnis', gnis)
+		g.bind('cbsa', cbsa)
+		g.bind('naics-ind', naics_ind)
+		g.bind('naics-own', naics_own)
+		g.bind('soc', soc)
+		g.bind('qb', qb)
+		g.bind('sdmx-dimension', sdmx_dimension)
+		g.bind('sdmx-measure', sdmx_measure)
+		g.bind('sdmx-attribute', sdmx_attribute)
+		g.bind('sdmx-code', sdmx_code)
+	##
+	#
+	#
+	@staticmethod
+	def parse_industry(s, m):
+		ret = m.get(s)
 		if ret is None:
-			logging.critical("parse_series: FIPSMap returned None for state {0}".format(area[0:2]))
-			ret = '-1'
-		areaurl = gnis[ret]
-	elif area[0:2] != '00' and area[2:7] != '00000':
-		#logging.debug("parse_series: skipping record: nonmetro area {0}".format(area))
-		return (None,)*5
-	else:
-		areaurl = cbsa[area[2:7]]
+			return None,None
+		ind,own = ret
+		return naics_ind[ind], naics_own[own]
 
-	(indurl,ownurl) = parse_industry(industry, indm)
-	if indurl is None:
-		#logging.debug("parse_series: skipping record: industry_code {0}".format(industry))
-		return (None,)*5
+	##
+	# Return SOC url.
+	#
+	@staticmethod
+	def parse_occupation(s):
+		frag = s[0:2] + '-' + s[2:6]
+		return soc[frag]
 
-	socurl = parse_occupation(occupation)
-	if socurl is None:
-		logging.warning("parse_series: skipping record: occupation_code {0}".format(occupation))
-		return (None,)*5
+	##
+	# Parse the series_id field. Return None if we should skip record.
+	#
+	# TODO: don't skip nonmetropolitan areas
+	#
+	@staticmethod
+	def parse_series(s, gnism, indm):
+		survey = s[0:2]
+		seasonal = s[2:3]
+		areatye = s[3:4]
+		area = s[4:11]
+		industry = s[11:17]
+		occupation = s[17:23]
+		datatype = s[23:25]
 
-	return areaurl,indurl,ownurl,socurl,datatype
+		assert survey == 'OE'
+		if datatype not in {'01','02', '04', '05', '13'}:
+			#logging.debug("parse_series: skipping record: datatype {0}".format(datatype))
+			return (None,)*5
 
-##
-# TODO: use NAICS ownership code
-#
-def convert_oes(g, f, gnism, indm):
-	csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
-	next(csv_reader)
+		if area == '0000000':
+			areaurl = gnis['1890467']
+		elif area[0:2] != '00' and area[2:7] == '00000':
+			ret = gnism.get(area[0:2])
+			if ret is None:
+				logging.critical("parse_series: FIPSMap returned None for state {0}".format(area[0:2]))
+				ret = '-1'
+			areaurl = gnis[ret]
+		elif area[0:2] != '00' and area[2:7] != '00000':
+			#logging.debug("parse_series: skipping record: nonmetro area {0}".format(area))
+			return (None,)*5
+		else:
+			areaurl = cbsa[area[2:7]]
 
-	for n,row in enumerate(csv_reader, 1):
-		if n % 10000 == 0:
-			logging.debug("Processing {0}".format(n))
+		(indurl,ownurl) = OESGraph.parse_industry(industry, indm)
+		if indurl is None:
+			#logging.debug("parse_series: skipping record: industry_code {0}".format(industry))
+			return (None,)*5
 
-		series = row[0].strip()
-		year = row[1].strip()
-		period = row[2].strip()
-		value = row[3].strip()
-		footnotes = row[4].strip()
+		socurl = OESGraph.parse_occupation(occupation)
+		if socurl is None:
+			logging.warning("parse_series: skipping record: occupation_code {0}".format(occupation))
+			return (None,)*5
 
-		assert period == 'A01'
+		return areaurl,indurl,ownurl,socurl,datatype
 
-		areaurl,indurl,ownurl,socurl,datatype = parse_series(series, gnism, indm)
-		if datatype is None:
-			continue
+	##
+	# TODO: use NAICS ownership code
+	#
+	def build(self, f, gnism, indm):
+		g = self.g
+		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
+		next(csv_reader)
 
-		url = oes['_'.join([series,year,period])]
-		g.add((url, rdflib.RDF.type, obstype))
-		g.add((url, areaprop, areaurl))
-		g.add((url, indprop, indurl))
-		g.add((url, ownprop, ownurl))
-		g.add((url, socprop, socurl))
-		g.add((url, freqprop, freqvala))
-		g.add((url, tpprop, rdflib.Literal(year, datatype=dtgy)))
-		if datatype == '01':
-			g.add((url, rdflib.RDF.type, emptype))
-			g.add((url, peopvalprop, rdflib.Literal(value, datatype=dtnni)))
-		elif datatype == '02':
-			g.add((url, rdflib.RDF.type, empsemtype))
-			g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
-		elif datatype == '04':
-			g.add((url, rdflib.RDF.type, wagemeanatype))
-			g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
-		elif datatype == '05':
-			g.add((url, rdflib.RDF.type, wagsemtype))
-			g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
-		elif datatype == '13':
-			g.add((url, rdflib.RDF.type, wagemedatype))
-			g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
+		for n,row in enumerate(csv_reader, 1):
+			if n % 10000 == 0:
+				logging.debug("Processing {0}".format(n))
+
+			series = row[0].strip()
+			year = row[1].strip()
+			period = row[2].strip()
+			value = row[3].strip()
+			footnotes = row[4].strip()
+
+			assert period == 'A01'
+
+			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series(series, gnism, indm)
+			if datatype is None:
+				continue
+
+			url = oes['_'.join([series,year,period])]
+			g.add((url, rdflib.RDF.type, obstype))
+			g.add((url, areaprop, areaurl))
+			g.add((url, indprop, indurl))
+			g.add((url, ownprop, ownurl))
+			g.add((url, socprop, socurl))
+			g.add((url, freqprop, freqvala))
+			g.add((url, tpprop, rdflib.Literal(year, datatype=dtgy)))
+			if datatype == '01':
+				g.add((url, rdflib.RDF.type, emptype))
+				g.add((url, peopvalprop, rdflib.Literal(value, datatype=dtnni)))
+			elif datatype == '02':
+				g.add((url, rdflib.RDF.type, empsemtype))
+				g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
+			elif datatype == '04':
+				g.add((url, rdflib.RDF.type, wagemeanatype))
+				g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
+			elif datatype == '05':
+				g.add((url, rdflib.RDF.type, wagsemtype))
+				g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
+			elif datatype == '13':
+				g.add((url, rdflib.RDF.type, wagemedatype))
+				g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
+
+	##
+	#
+	#
+	def serialize(self, *args, **kwargs):
+		self.g.serialize(*args, **kwargs)
 
 if __name__ == '__main__':
 	main()
