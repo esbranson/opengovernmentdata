@@ -95,7 +95,7 @@ def main():
 	datafn = args[0] # oe.data.0.Current
 	indfn = args[1] # oe.industry
 	govfn = args[2] # GOVT_UNITS_*.txt
-	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
+	logging.basicConfig(format='{levelname} {process}/{threadName} {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
 	with open(govfn) as f:
@@ -235,7 +235,7 @@ class OESGraph:
 
 		assert survey == 'OE'
 		if datatype not in {'01','02', '04', '05', '13'}:
-			#logging.debug("parse_series: skipping record: datatype {0}".format(datatype))
+			#logging.debug("skipping record: datatype {0}".format(datatype))
 			return (None,)*5
 
 		if area == '0000000':
@@ -243,23 +243,23 @@ class OESGraph:
 		elif area[0:2] != '00' and area[2:7] == '00000':
 			ret = gnism.get(area[0:2])
 			if ret is None:
-				logging.critical("parse_series: FIPSMap returned None for state {0}".format(area[0:2]))
+				logging.critical("FIPSMap returned None for state {0}".format(area[0:2]))
 				ret = '-1'
 			areaurl = gnis[ret]
 		elif area[0:2] != '00' and area[2:7] != '00000':
-			#logging.debug("parse_series: skipping record: nonmetro area {0}".format(area))
+			#logging.debug("skipping record: nonmetro area {0}".format(area))
 			return (None,)*5
 		else:
 			areaurl = cbsa[area[2:7]]
 
 		(indurl,ownurl) = OESGraph.parse_industry(industry, indm)
 		if indurl is None:
-			#logging.debug("parse_series: skipping record: industry_code {0}".format(industry))
+			#logging.debug("skipping record: industry_code {0}".format(industry))
 			return (None,)*5
 
 		socurl = OESGraph.parse_occupation(occupation)
 		if socurl is None:
-			logging.warning("parse_series: skipping record: occupation_code {0}".format(occupation))
+			logging.warning("skipping record: occupation_code {0}".format(occupation))
 			return (None,)*5
 
 		return areaurl,indurl,ownurl,socurl,datatype
