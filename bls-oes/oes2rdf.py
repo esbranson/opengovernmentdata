@@ -95,7 +95,7 @@ def main():
 	datafn = args[0] # oe.data.0.Current
 	indfn = args[1] # oe.industry
 	govfn = args[2] # GOVT_UNITS_*.txt
-	logging.basicConfig(format='{levelname} {process}/{threadName} {message}', style='{', level=debuglvl)
+	logging.basicConfig(format='{levelname} {process}/{thread}/{funcName} {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
 	with open(govfn) as f:
