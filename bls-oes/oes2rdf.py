@@ -26,6 +26,10 @@ import sys
 import itertools
 import logging
 
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
+import geonames2rdf
+
 oes = rdflib.Namespace("http://data.bls.gov/dataset/oes/")
 oes_onto = rdflib.Namespace("http://data.bls.gov/ont/oes#")
 gnis = rdflib.Namespace("http://data.usgs.gov/id/gnis/")
@@ -100,7 +104,7 @@ def main():
 
 	logging.info("Building FIPSMap")
 	with open(govfn) as f:
-		gnism = FIPSMap(f)
+		gnism = geonames2rdf.FIPSMap(f)
 
 	logging.info("Building IndustryMap")
 	with open(indfn) as f:
@@ -115,37 +119,13 @@ def main():
 	g.serialize(outf, format=outfmt)
 
 ##
-# A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
+# Use oe.industry file to pre-build map of industry codes to -> NAICS codes.
 #
-class FIPSMap:
-	##
-	# Use BGN "Government Units" file to pre-build map of state/county
-	# FIPS codes -> GNIS IDs.
-	#
-	# @input f: The BGN "Government Units" file.
-	#
-	def __init__(self, f):
-		self.m = {}
-		csv_reader = csv.reader(f, delimiter='|')
-		next(csv_reader)
-		for row in csv_reader:
-			self.add(row[0], row[4], row[2])
-	def add(self, gnisid, fips_sn, fips_cn=''):
-		self.m[(fips_sn, fips_cn)] = gnisid
-	def get(self, fips_sn, fips_cn=''):
-		return (fips_sn, fips_cn) in self.m and self.m[(fips_sn, fips_cn)] or None
-
-##
-# A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
+# TODO: Deal with the national level with ownership codes.
+#
+# @input f: The oe.industry file.
 #
 class IndustryMap:
-	##
-	# Use oe.industry file to pre-build map of industry codes to -> NAICS codes.
-	#
-	# TODO: Deal with the national level with ownership codes.
-	#
-	# @input f: The oe.industry file.
-	#
 	def __init__(self, f):
 		self.m = {}
 		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)

@@ -80,12 +80,17 @@ def main():
 	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
+	with open(govfn) as f:
+		m = FIPSMap(f)
+
+	logging.info("Creating graph")
 	g = rdflib.Graph()
 	g.bind('gnis-ont', gnisonto_ns)
 	g.bind('geo', geo_ns)
-	m = FIPSMap()
+
+	logging.info("Adding states to graph")
 	with open(govfn) as f:
-		convert_fips2gnis(g, f, m)
+		convert_fips2gnis(g, f)
 
 	logging.info("Building RDF")
 	with open(codesfn) as f:
@@ -98,27 +103,34 @@ def main():
 # A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
 #
 class FIPSMap:
-	def __init__(self):
+	##
+	# Use BGN "Government Units" file to pre-build map of state/county
+	# FIPS codes -> GNIS IDs.
+	#
+	# @input f: The BGN "Government Units" file.
+	#
+	def __init__(self, f):
 		self.m = {}
+		csv_reader = csv.reader(f, delimiter='|')
+		next(csv_reader)
+		for row in csv_reader:
+			self.add(row[0], row[4], row[2])
 	def add(self, gnisid, fips_sn, fips_cn=''):
 		self.m[(fips_sn, fips_cn)] = gnisid
 	def get(self, fips_sn, fips_cn=''):
 		return (fips_sn, fips_cn) in self.m and self.m[(fips_sn, fips_cn)] or None
 
 ##
-# Use BGN "Government Units" file to pre-build map of state/county
-# FIPS codes -> GNIS IDs. Also add states to graph because they aren't included
+# Use BGN "Government Units" file to add states to graph because they aren't included
 # in the NationalFedCodes_*.txt file.
 #
+# @input g: The Graph.
 # @input f: The BGN "Government Units" file.
-# @input m: A FIPSMap.
 #
-def convert_fips2gnis(g, f, m):
+def convert_fips2gnis(g, f):
 	csv_reader = csv.reader(f, delimiter='|')
 	next(csv_reader)
 	for row in csv_reader:
-		m.add(row[0], row[4], row[2])
-
 		if row[1] == 'STATE':
 			url = gnis_ns[row[0]]
 			g.add((url, rdflib.RDF.type, gnisfeat))
