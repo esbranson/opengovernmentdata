@@ -276,7 +276,7 @@ class OESGraph:
 			url = oes['_'.join([series,year,period])]
 			g.add((url, rdflib.RDF.type, obstype))
 			g.add((url, areaprop, areaurl))
-			g.add((url, serprop, rdflib.Literal(series)))
+			g.add((url, serprop, oes[series]))
 			g.add((url, indprop, indurl))
 			g.add((url, ownprop, ownurl))
 			g.add((url, socprop, socurl))
