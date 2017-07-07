@@ -114,7 +114,7 @@ def main():
 	logging.info("Building RDF")
 	g = OESGraph()
 	with open(datafn) as f:
-		g.build(f, gnism, indm)
+		g.build_data(f, gnism, indm)
 
 	logging.info("Saving RDF")
 	g.serialize(outf, format=outfmt)
@@ -206,7 +206,7 @@ class OESGraph:
 	# TODO: don't skip nonmetropolitan areas
 	#
 	@staticmethod
-	def parse_series(s, gnism, indm):
+	def parse_series_id(s, gnism, indm):
 		survey = s[0:2]
 		seasonal = s[2:3]
 		areatye = s[3:4]
@@ -247,9 +247,11 @@ class OESGraph:
 		return areaurl,indurl,ownurl,socurl,datatype
 
 	##
+	# Parse oe.data file and build OESGraph.
+	#
 	# TODO: use NAICS ownership code
 	#
-	def build(self, f, gnism, indm):
+	def build_data(self, f, gnism, indm):
 		g = self.g
 		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
 		next(csv_reader)
@@ -264,9 +266,10 @@ class OESGraph:
 			value = row[3].strip()
 			footnotes = row[4].strip()
 
+			# XXX don't know what other periods mean
 			assert period == 'A01'
 
-			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series(series, gnism, indm)
+			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series_id(series, gnism, indm)
 			if datatype is None:
 				continue
 
