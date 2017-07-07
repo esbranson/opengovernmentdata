@@ -48,6 +48,7 @@ wagemeanatype = oes_onto['WageMeanAnnualObservation']
 wagemedatype = oes_onto['WageMedianAnnualObservation']
 wagsemtype = oes_onto['WageSEMObservation']
 areaprop = sdmx_dimension['refArea']
+serprop = oes_onto['series']
 indprop = oes_onto['industry']
 ownprop = oes_onto['ownership']
 socprop = oes_onto['occupation']
@@ -291,6 +292,7 @@ class OESGraph:
 			url = oes['_'.join([series,year,period])]
 			g.add((url, rdflib.RDF.type, obstype))
 			g.add((url, areaprop, areaurl))
+			g.add((url, serprop, series))
 			g.add((url, indprop, indurl))
 			g.add((url, ownprop, ownurl))
 			g.add((url, socprop, socurl))
