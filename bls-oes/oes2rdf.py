@@ -9,12 +9,12 @@ oes2rdf - convert the US BLS Occupational Employment Statistics dataset into RDF
 
 Requires python3-rdfllib and python3-bsddb3. See <https://www.bls.gov/oes/>.
 
-Usage:  oes2rdf [options] oe.data.* oe.industry GOVT_UNITS_*.txt
+Usage:  oes2rdf [options] oe.data.1.AllData oe.industry GOVT_UNITS_*.txt
 Arguments:
 
 	-o output	output file (default: stdout)
 	-d			enable debugging
-	-f fmt		use format for output file (see RDFLib documentation)	
+	-f fmt		use format for output file (default: turtle)
 """
 
 import rdflib
@@ -92,6 +92,7 @@ def main():
 		elif opt in {'-d', '--debug'}:
 			debuglvl = logging.DEBUG
 		elif opt in {'-f', '--format'}:
+			# XXX verify, otherwise die and inform of valid input
 			outfmt = arg
 		else:
 			logging.fatal('invalid flag {}'.format(opt))
