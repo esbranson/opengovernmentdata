@@ -12,13 +12,18 @@ Usage:  lau2rdf [options] acgnisfile infile
 	-f fmt		use format for output file (default: turtle)
 """
 
-# ~/.local/bin/csv2rdf -o la_12Colorado.n3 -b "http://data.bls.gov/data/la#" -p "http://data.bls.gov/ont/la#" -d$'\t' -i '(0,)' la.data.12.Colorado
-
 import rdflib
-#import rdflib.tools.csv2rdf
 import csv
+import tempfile
 import sys
-import re
+import logging
+import getopt
+
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
+from geonames2rdf import FIPSMap
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'lib'))
+from stats import StatsGraph
 
 def open_acgnis(acgnisfn):
 	acgnis = {}
