@@ -1,16 +1,11 @@
 #!/usr/bin/python3 -u
 
-##
-# oes2rdf - convert the US BLS Occupational Employment Statistics dataset into RDF
-#
+usage="""oes2rdf - convert US BLS Occupational Employment Statistics dataset into RDF
 
-usage="""
-oes2rdf - convert the US BLS Occupational Employment Statistics dataset into RDF
-
-Requires python3-rdfllib and python3-bsddb3. See <https://www.bls.gov/oes/>.
+See <https://www.bls.gov/oes/>. Requires python3, python3-rdfllib and 
+python3-bsddb3.
 
 Usage:  oes2rdf [options] oe.data.1.AllData oe.industry GOVT_UNITS_*.txt
-Arguments:
 
 	-o output	output file (default: stdout)
 	-d			enable debugging
@@ -41,17 +36,14 @@ def main():
 	outfmt = 'turtle'
 	debuglvl = logging.INFO
 
-	logging.basicConfig(format='{levelname} {funcName} {message}', style='{', level=debuglvl)
+	logging.basicConfig(format='{levelname}/{funcName} {message}', style='{', level=debuglvl)
 
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], 'o:df:')
+		opts, args = getopt.getopt(sys.argv[1:], 'ho:df:')
 	except getopt.GetoptError as e:
 		logging.fatal('getopt error {}'.format(e))
 		return 1
 
-	if len(args) < 3:
-		logging.fatal('need input files')
-		return 1
 	for opt, arg in opts:
 		if opt in {'-o', '--output'}:
 			outf = arg
@@ -60,9 +52,17 @@ def main():
 		elif opt in {'-f', '--format'}:
 			# XXX verify, otherwise die and inform of valid input
 			outfmt = arg
+		elif opt in {'-h', '--help'}:
+			print(usage, file=sys.stderr)
+			return 0
 		else:
 			logging.fatal('invalid flag {}'.format(opt))
+			print(usage, file=sys.stderr)
 			return 1
+	if len(args) < 3:
+		logging.fatal('need input files')
+		print(usage, file=sys.stderr)
+		return 1
 
 	datafn = args[0] # oe.data.0.Current
 	indfn = args[1] # oe.industry
