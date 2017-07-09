@@ -41,6 +41,8 @@ def main():
 	outfmt = 'turtle'
 	debuglvl = logging.INFO
 
+	logging.basicConfig(format='{levelname} {funcName} {message}', style='{', level=debuglvl)
+
 	try:
 		opts, args = getopt.getopt(sys.argv[1:], 'o:df:')
 	except getopt.GetoptError as e:
@@ -65,7 +67,6 @@ def main():
 	datafn = args[0] # oe.data.0.Current
 	indfn = args[1] # oe.industry
 	govfn = args[2] # GOVT_UNITS_*.txt
-	logging.basicConfig(format='{levelname} {process}/{thread}/{funcName} {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPSMap")
 	with open(govfn) as f:
