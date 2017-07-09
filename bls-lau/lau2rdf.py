@@ -25,6 +25,53 @@ from geonames2rdf import FIPSMap
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'lib'))
 from stats import StatsGraph
 
+##
+# Commandline driver function.
+#
+def main():
+	outf = sys.stdout.buffer
+	outfmt = 'turtle'
+	debuglvl = logging.INFO
+
+	logging.basicConfig(format='{levelname}/{funcName} {message}', style='{', level=debuglvl)
+
+	try:
+		opts, args = getopt.getopt(sys.argv[1:], 'ho:df:')
+	except getopt.GetoptError as e:
+		logging.fatal('getopt error {}'.format(e))
+		return 1
+
+	for opt, arg in opts:
+		if opt in {'-o', '--output'}:
+			outf = arg
+		elif opt in {'-d', '--debug'}:
+			debuglvl = logging.DEBUG
+		elif opt in {'-f', '--format'}:
+			# XXX verify, otherwise die and inform of valid input
+			outfmt = arg
+		elif opt in {'-h', '--help'}:
+			print(usage, file=sys.stderr)
+			return 0
+		else:
+			logging.fatal('invalid flag {}'.format(opt))
+			print(usage, file=sys.stderr)
+			return 1
+	if len(args) < 3:
+		logging.fatal('need input files')
+		print(usage, file=sys.stderr)
+		return 1
+
+	acgnisfn = args[0]
+	infn = args[1]
+	logging.getLogger().setLevel(debuglvl)
+
+	logging.info("Opening {}".format(acgnisfn))
+	acgnis = open_acgnis(acgnisfn)
+
+	logging.info("Converting {}".format(infn))
+	g = init()
+	convert(infn, outf, g, acgnis, outfmt)
+
 def open_acgnis(acgnisfn):
 	acgnis = {}
 	f = open(acgnisfn)
@@ -203,25 +250,6 @@ def convert(infn, outfn, g, acgnis, fmt='turtle'):
 	fo.close()
 
 #	return g
-
-def main():
-	if len(sys.argv) != 4:
-		print('FATAL: not enough args')
-		print(usage)
-		sys.exit(1)
-	acgnisfn, infn, outfn = sys.argv[1], sys.argv[2], sys.argv[3]
-	if outfn.endswith('nt'):
-		fmt = 'nt'
-	elif outfn.endswith('ttl'):
-		fmt = 'turtle'
-	else:
-		print('FATAL: unkown format', repr(outfn))
-		sys.exit(1)
-	print('opening', acgnisfn)
-	acgnis = open_acgnis(acgnisfn)
-	print('doing', infn, outfn)
-	g = init()
-	convert(infn, outfn, g, acgnis, fmt)
 
 if __name__ == '__main__':
 	main()
