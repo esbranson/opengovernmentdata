@@ -29,44 +29,8 @@ import logging
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
 import geonames2rdf
-
-oes = rdflib.Namespace("http://data.bls.gov/dataset/oes/")
-oes_onto = rdflib.Namespace("http://data.bls.gov/ont/oes#")
-gnis = rdflib.Namespace("http://data.usgs.gov/id/gnis/")
-soc = rdflib.Namespace("http://data.omb.gov/id/soc/")
-cbsa = rdflib.Namespace("http://data.omb.gov/id/cbsa/")
-#csa = rdflib.Namespace("http://data.omb.gov/id/csa/")
-naics_ind = rdflib.Namespace("http://data.census.gov/id/naics-industry/")
-naics_own = rdflib.Namespace("http://data.cenus.gov/id/naics-ownership/")
-qb = rdflib.Namespace("http://purl.org/linked-data/cube#")
-sdmx_dimension = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/dimension#")
-sdmx_measure = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/measure#")
-sdmx_attribute = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/attribute#")
-sdmx_code = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/code#")
-
-# TODO: use rdfs:subPropertyOf
-obstype = qb['Observation']
-emptype = oes_onto['EmplObservation']
-empsemtype = oes_onto['EmplSEMObservation']
-wagemeanatype = oes_onto['WageMeanAnnualObservation']
-wagemedatype = oes_onto['WageMedianAnnualObservation']
-wagsemtype = oes_onto['WageSEMObservation']
-areaprop = sdmx_dimension['refArea']
-serprop = oes_onto['series']
-indprop = oes_onto['industry']
-ownprop = oes_onto['ownership']
-socprop = oes_onto['occupation']
-freqprop = sdmx_dimension['freq']
-tpprop = sdmx_dimension['timePeriod']
-freqvala = sdmx_code['freq-A'] # see <http://sdmx.org/docs/1_0/SDMXCommon.xsd> TimePeriodType
-#curval = rdflib.Literal('USD', datatype=rdflib.XSD.string) # ISO 4217
-peopvalprop = oes_onto['people'] # rdfs:subPropertyOf sdmx-measure:obsValue
-percvalprop = oes_onto['percentRelStdErr'] # rdfs:subPropertyOf sdmx-measure:obsValue
-#obsvalprop = sdmx_measure['obsValue']
-curvalprop = sdmx_measure['currency']
-dtgy = rdflib.XSD.gYear
-dtnni = rdflib.XSD.nonNegativeInteger
-dtd = rdflib.XSD.decimal
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'lib'))
+import stats
 
 ##
 # Driver function. Create FIPS-to-GNISID map, then create RDF data cube graph,
@@ -159,28 +123,31 @@ class IndustryMap:
 		return code in self.m and self.m[code] or None
 
 ##
+# Represent a OES graph.
 #
-#
-class OESGraph:
+class OESGraph(stats.StatsGraph):
+	#data_oes = rdflib.Namespace("http://data.bls.gov/dataset/oes/")
+	ont_oes = rdflib.Namespace("http://data.bls.gov/ont/oes#")
+	oes_emp = ont_oes['EmplObservation'] # rdfs:subClassOf qb:Observation
+	oes_empsem = ont_oes['EmplSEMObservation'] # rdfs:subClassOf qb:Observation
+	oes_wagemeana = ont_oes['WageMeanAnnualObservation'] # rdfs:subClassOf qb:Observation
+	oes_wagemeda = ont_oes['WageMedianAnnualObservation'] # rdfs:subClassOf qb:Observation
+	oes_wagsem = ont_oes['WageSEMObservation'] # rdfs:subClassOf qb:Observation
+	oes_series = ont_oes['series']
+	oes_ind = ont_oes['industry']
+	oes_own = ont_oes['ownership']
+	oes_soc = ont_oes['occupation']
+	oes_people = ont_oes['people'] # rdfs:subPropertyOf sdmx-measure:obsValue
+	oes_rse = ont_oes['percentRelStdErr'] # rdfs:subPropertyOf sdmx-measure:obsValue
+	#curval = rdflib.Literal('USD', datatype=rdflib.XSD.string) # ISO 4217
+
 	##
 	#
 	#
 	def __init__(self):
-		with tempfile.TemporaryDirectory() as tmpdn:
-			g = rdflib.Graph(rdflib.plugins.sleepycat.Sleepycat(tmpdn))
-		self.g = g
-		g.bind('oes', oes)
-		g.bind('oes-ont', oes_onto)
-		g.bind('gnis', gnis)
-		g.bind('cbsa', cbsa)
-		g.bind('naics-ind', naics_ind)
-		g.bind('naics-own', naics_own)
-		g.bind('soc', soc)
-		g.bind('qb', qb)
-		g.bind('sdmx-dimension', sdmx_dimension)
-		g.bind('sdmx-measure', sdmx_measure)
-		g.bind('sdmx-attribute', sdmx_attribute)
-		g.bind('sdmx-code', sdmx_code)
+		super().__init__()
+		self.g.bind('oes-ont', self.ont_oes)
+
 	##
 	#
 	#
@@ -190,7 +157,7 @@ class OESGraph:
 		if ret is None:
 			return None,None
 		ind,own = ret
-		return naics_ind[ind], naics_own[own]
+		return stats.StatsGraph.id_naics_ind[ind], stats.StatsGraph.id_naics_own[own]
 
 	##
 	# Return SOC url.
@@ -198,7 +165,7 @@ class OESGraph:
 	@staticmethod
 	def parse_occupation(s):
 		frag = s[0:2] + '-' + s[2:6]
-		return soc[frag]
+		return stats.StatsGraph.id_soc[frag]
 
 	##
 	# Parse the series_id field. Return None if we should skip record.
@@ -232,7 +199,7 @@ class OESGraph:
 			#logging.debug("skipping record: nonmetro area {0}".format(area))
 			return (None,)*5
 		else:
-			areaurl = cbsa[area[2:7]]
+			areaurl = stats.StatsGraph.id_cbsa[area[2:7]]
 
 		(indurl,ownurl) = OESGraph.parse_industry(industry, indm)
 		if indurl is None:
@@ -252,7 +219,6 @@ class OESGraph:
 	# TODO: use NAICS ownership code
 	#
 	def build_data(self, f, gnism, indm):
-		g = self.g
 		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
 		next(csv_reader)
 
@@ -273,36 +239,30 @@ class OESGraph:
 			if datatype is None:
 				continue
 
-			url = oes['_'.join([series,year,period])]
-			g.add((url, rdflib.RDF.type, obstype))
-			g.add((url, areaprop, areaurl))
-			g.add((url, serprop, oes[series]))
-			g.add((url, indprop, indurl))
-			g.add((url, ownprop, ownurl))
-			g.add((url, socprop, socurl))
-			g.add((url, freqprop, freqvala))
-			g.add((url, tpprop, rdflib.Literal(year, datatype=dtgy)))
+			url = self.id_oes['_'.join([series,year,period])]
+			self.g.add((url, rdflib.RDF.type, self.qb_obs))
+			self.g.add((url, self.sdmx_area, areaurl))
+			self.g.add((url, self.oes_series, self.id_oes[series]))
+			self.g.add((url, self.oes_ind, indurl))
+			self.g.add((url, self.oes_own, ownurl))
+			self.g.add((url, self.oes_soc, socurl))
+			self.g.add((url, self.sdmx_freq, self.sdmx_freqa))
+			self.g.add((url, self.sdmx_time, rdflib.Literal(year, datatype=rdflib.XSD.gYear)))
 			if datatype == '01':
-				g.add((url, rdflib.RDF.type, emptype))
-				g.add((url, peopvalprop, rdflib.Literal(value, datatype=dtnni)))
+				self.g.add((url, rdflib.RDF.type, self.oes_emp))
+				self.g.add((url, self.oes_people, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
 			elif datatype == '02':
-				g.add((url, rdflib.RDF.type, empsemtype))
-				g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
+				self.g.add((url, rdflib.RDF.type, self.oes_empsem))
+				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
 			elif datatype == '04':
-				g.add((url, rdflib.RDF.type, wagemeanatype))
-				g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
+				self.g.add((url, rdflib.RDF.type, self.oes_wagemeana))
+				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
 			elif datatype == '05':
-				g.add((url, rdflib.RDF.type, wagsemtype))
-				g.add((url, percvalprop, rdflib.Literal(value, datatype=dtd)))
+				self.g.add((url, rdflib.RDF.type, self.oes_wagsem))
+				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
 			elif datatype == '13':
-				g.add((url, rdflib.RDF.type, wagemedatype))
-				g.add((url, curvalprop, rdflib.Literal(value, datatype=dtnni)))
-
-	##
-	#
-	#
-	def serialize(self, *args, **kwargs):
-		self.g.serialize(*args, **kwargs)
+				self.g.add((url, rdflib.RDF.type, self.oes_wagemeda))
+				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
 
 if __name__ == '__main__':
 	main()
