@@ -1,5 +1,17 @@
 #!/usr/bin/python3 -u
 
+usage="""lau2rdf - convert US BLS Local Area Unemployment Statistics data into RDF
+
+See <https://www.bls.gov/lau/>. Requires python3, python3-rdfllib and 
+python3-bsddb3.
+
+Usage:  lau2rdf [options] acgnisfile infile
+
+	-o output	output file (default: stdout)
+	-d			enable debugging
+	-f fmt		use format for output file (default: turtle)
+"""
+
 # ~/.local/bin/csv2rdf -o la_12Colorado.n3 -b "http://data.bls.gov/data/la#" -p "http://data.bls.gov/ont/la#" -d$'\t' -i '(0,)' la.data.12.Colorado
 
 import rdflib
@@ -186,8 +198,6 @@ def convert(infn, outfn, g, acgnis, fmt='turtle'):
 	fo.close()
 
 #	return g
-
-usage="""Usage: ./conv_la.py acgnisfile infile outfile"""
 
 def main():
 	if len(sys.argv) != 4:
