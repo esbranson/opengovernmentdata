@@ -99,8 +99,6 @@ class NameMap:
 		for row in csv_reader:
 			gnis = row[0]
 			name = row[1]
-#			clas = row[2] # 'Civil'
-#			census_code = row[3] # '99' + county FIPS if county
 			census_class = row[4]
 			state_fips = row[7]
 			county_fips = row[10]
@@ -112,69 +110,57 @@ class NameMap:
 	#
 	# @input name: An un-normalized name from the <la.area> file.
 	# @input ac: An area code from the <la.area> file.
+	# @output: GNIS ID or None
 	#
-	# TODO Test city name with county FIPS instead of state?
-	#
-	def get(self, name, ac):
+	def map_city2gnis(self, name, ac):
 		name,county = NameMap.normalize_name(name)
 		fips_s = ac[2:4]
-		allmatches = []
-		# find all with that name inside
+
+		# Search for exact match.
 		for item in self.l:
-			if name == item[1] and item[3] == fips_s: # XXX Not in original code; does this work?
+			if item[1] == name and item[3] == fips_s:
 				return item[0]
-			if re.search(name, item[1]) and item[3] == fips_s:
-				allmatches.append(item)
-		# see if there is only 1 incorporated city
-		citymatches = []
-		for m in allmatches:
-	#		if m[2][0] == 'P' or m[2][0] == 'C': #Census Class Codes for cities
-			if m[2][0] in {'C','T','Z'}: # Townships, whatever Zs are
-				citymatches.append(m)
-		if len(citymatches) == 1:
-			logging.debug('city {} {} {}'.format(ac, name, citymatches[0][0]))
-			return citymatches[0][0]
-		elif len(citymatches) > 1:
-			# county?
-			if county:
-				# XXX whatif multiple matches?
-				for item in citymatches:
-					if item[5] == county:
-						return item[0]
-			# XXX pick shortest name?
-			shortest = citymatches[0]
-			same = True
-			last = citymatches[0][0]
-			for m in citymatches[1:]:
-				if len(m[1]) < len(shortest[1]):
-					shortest = m
-	#			elif len(m[1]) == len(shortest[1]):
-	#				logging.debug('city wtf samelen {} {}'.format(shortest, m))
-				if same and m[0] == last: # if theyre all same gnis
-					same = True
-				else:
-					same = False
-				last = m[0]
-			if not same:
-				logging.warning('city outof {} {} {} {} {}'.format(ac, name, citymatches, 'pick', shortest))
-			return shortest[0]
-	#	if '(' in name:
-	#		alt = name.split('(')[0].strip()
-	#		logging.debug('city alt {} {}'.format(name, alt))
-	##		return search_codes_city(gnlist, alt, fips_s, ac)
-	#		return search_fips2gnis_city(gnlist, alt, county, fips_s, ac)
-		return None
+
+		# Collect regular expression matches.
+		matches = []
+		for item in self.l:
+			# If re matches, they're in our state, and have the right Census class.
+			if re.search(name, item[1]) and item[3] == fips_s and item[2][0] in {'C','T','Z'}: # Townships, whatever Zs are
+				matches.append(item)
+
+		# Return None if no matches.
+		if len(matches) == 0:
+			logging.debug("No match for {} \"{}\"".format(ac, name))
+			return None
+
+		# Return the single match.
+		if len(matches) == 1:
+			return matches[0][0]
+
+		# Return the single match in the given county.
+		if county:
+			items = list(filter(lambda item: item[5] == county, matches))
+			if len(items) == 1:
+				return items[0][0]
+
+		# Otherwise pick the shortest name.
+		shortest = sorted(matches, key=lambda l: len(l[1]))
+		logging.debug("Short matching {} \"{}\" to {} \"{}\"".format(ac, name, shortest[0], shortest[1]))
+		return shortest[0]
 
 	##
-	# Return a normalized (for the NationalFedCodes file) name, along
+	# Return a normalized name (for the NationalFedCodes file), along
 	# with a county (as a tuple) if needed.
+	#
+	# @input name: An un-normalized name from the <la.area> file.
+	# @output: A tuple (name,county) where county may be None.
 	#
 	@staticmethod
 	def normalize_name(name):
-		# XXX replacements
+		# Replacements.
 		name = name.replace('St.', 'Saint')
 
-		# matching
+		# Matching.
 		res = name.split(' city, ')
 		if len(res) > 1:
 			return 'City of '+res[0], None
@@ -244,9 +230,11 @@ class NameMap:
 ##
 # A map of LAU area code => linked data ID URL.
 #
-# XXX Currently only works for counties and most cities and towns.
-# XXX Currently only returns GNIS ID URLs.
-# TODO Use the dict interface.
+# Use like a dictionary, as collections.UserDict manages the access
+# methods such as __getitem__. We only populate the internal dictionary.
+#
+# TODO Currently only works for counties and most cities and towns.
+# TODO Currently only returns GNIS ID URLs.
 #
 class AreaMap(collections.UserDict):
 	##
@@ -290,7 +278,8 @@ class AreaMap(collections.UserDict):
 			gnis = m.get(fips_s, fips_c) # TODO exceptions?
 			if gnis is None:
 				logging.warning("No GNIS for area {}".format(area))
-			self[area] = gnis
+			else:
+				self[area] = StatsGraph.id_gnis[gnis]
 
 	##
 	# @input f: <https://download.bls.gov/pub/time.series/la/la.area>.
@@ -307,11 +296,9 @@ class AreaMap(collections.UserDict):
 				continue
 			elif type in {'F', 'G', 'H'}: # XXX Should this include 'F' (counties)?
 				name = row[2]
-				gnis = m.get(name, area)
-				if gnis is None:
-					logging.debug("No GNIS for area {}".format(area))
-				else:
-					self.data[area] = gnis
+				gnis = m.map_city2gnis(name, area)
+				if gnis is not None:
+					self[area] = StatsGraph.id_gnis[gnis]
 
 ##
 # Represent a LAU graph.
@@ -341,7 +328,8 @@ class LAUGraph(StatsGraph):
 		self.g.bind('lau-ont', self.ont_lau)
 
 	##
-	#
+	# @input f: An <la.data.*> file.
+	# @input m: An AreaMap object.
 	#
 	def parse_data(self, f, m):
 		csv_reader = csv.reader(f, delimiter='\t')
@@ -426,10 +414,10 @@ class LAUGraph(StatsGraph):
 			self.g.add((url, self.sdmx_time, date))
 			self.g.add((url, valtyp, rdflib.Literal(value, datatype=dt)))
 
-			# get FIPS from LAUS area code
+			# get GNIS from area code
 			if ac in m:
 				gnis = m[ac]
-				self.g.add((url, self.lau_gnis, self.id_gnis[gnis]))
+				self.g.add((url, self.lau_gnis, gnis))
 
 			# seasonality
 			if seas == 'S':
