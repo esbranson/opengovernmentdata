@@ -19,6 +19,7 @@ class StatsGraph:
 	id_csa = rdflib.Namespace("http://data.omb.gov/id/csa/")
 	id_naics_ind = rdflib.Namespace("http://data.census.gov/id/naics-industry/")
 	id_naics_own = rdflib.Namespace("http://data.cenus.gov/id/naics-ownership/")
+	id_lau = rdflib.Namespace("http://data.bls.gov/id/lau/")
 	qb = rdflib.Namespace("http://purl.org/linked-data/cube#")
 	sdmx_dimension = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/dimension#")
 	sdmx_measure = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/measure#")
@@ -30,8 +31,10 @@ class StatsGraph:
 	sdmx_freq = sdmx_dimension['freq']
 	sdmx_time = sdmx_dimension['timePeriod']
 	sdmx_freqa = sdmx_code['freq-A'] # see <http://sdmx.org/docs/1_0/SDMXCommon.xsd> TimePeriodType
+	sdmx_freqm = sdmx_code['freq-M']
 	sdmx_obs = sdmx_measure['obsValue']
 	sdmx_cur = sdmx_measure['currency']
+	sdmx_adj = sdmx_attribute['adjustDetail']
 
 	def __init__(self):
 		with tempfile.TemporaryDirectory() as tmpdn:
@@ -42,6 +45,7 @@ class StatsGraph:
 		#self.g.bind('naics-ind', self.id_naics_ind)
 		#self.g.bind('naics-own', self.id_naics_own)
 		#self.g.bind('soc', self.id_soc)
+		#self.g.bind('lau', self.id_lau)
 		self.g.bind('qb', self.qb)
 		self.g.bind('sdmx-dimension', self.sdmx_dimension)
 		self.g.bind('sdmx-measure', self.sdmx_measure)
