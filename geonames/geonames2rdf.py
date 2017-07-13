@@ -106,6 +106,9 @@ def main():
 # identifier and is a better identifier than FIPS 5-2 codes for states and
 # FIPS 6-4 codes for counties.
 #
+# Use like a dictionary, where the key is a tuple (FIPS state, FIPS county),
+# and where the FIPS county may be None if for a state.
+#
 # TODO Add states.
 #
 class FIPS2GNISDict(collections.UserDict):
@@ -126,15 +129,6 @@ class FIPS2GNISDict(collections.UserDict):
 			if county == '':
 				county = None
 			self[(state, county)] = gnis
-
-	##
-	# Use like a dictionary, where the key is a tuple (FIPS state, FIPS county),
-	# and where the FIPS county may be None if for a state.
-	#
-	def __getitem__(self, key):
-		if not (isinstance(key, tuple) and len(key) is 2 and isinstance(key[0], str) and (key[1] is None or isinstance(key[1], str))):
-			raise KeyError(key)
-		return super().__getitem__(key)
 
 ##
 # Use BGN "Government Units" file to add states to graph because they aren't included
