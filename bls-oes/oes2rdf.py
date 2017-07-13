@@ -23,7 +23,7 @@ import logging
 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
-import geonames2rdf
+from geonames2rdf import FIPS2GNISDict
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'lib'))
 import stats
 
@@ -70,7 +70,7 @@ def main():
 
 	logging.info("Building FIPSMap")
 	with open(govfn) as f:
-		gnism = geonames2rdf.FIPSMap(f)
+		gnism = FIPS2GNISDict(f)
 
 	logging.info("Building IndustryMap")
 	with open(indfn) as f:
@@ -191,7 +191,7 @@ class OESGraph(stats.StatsGraph):
 		if area == '0000000':
 			areaurl = gnis['1890467']
 		elif area[0:2] != '00' and area[2:7] == '00000':
-			ret = gnism.get(area[0:2])
+			ret = gnism[(area[0:2], None)]
 			if ret is None:
 				logging.critical("FIPSMap returned None for state {0}".format(area[0:2]))
 				ret = '-1'

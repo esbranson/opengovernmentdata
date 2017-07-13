@@ -23,7 +23,7 @@ import collections
 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
-from geonames2rdf import FIPSMap
+from geonames2rdf import FIPS2GNISDict
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'lib'))
 from stats import StatsGraph
 
@@ -247,7 +247,7 @@ class AreaMap(collections.UserDict):
 		super().__init__()
 
 		logging.info("Building FIPSMap")
-		fipsm = FIPSMap(govunitsf)
+		fipsm = FIPS2GNISDict(govunitsf)
 
 		logging.info("Building NameMap")
 		namem = NameMap(natfedf)
@@ -262,7 +262,7 @@ class AreaMap(collections.UserDict):
 	# Get LAU area => county GNIS mappings.
 	#
 	# @input f: <https://www.bls.gov/lau/laucnty16.txt>
-	# @input m: A FIPSMap.
+	# @input m: A FIPS2GNISDict.
 	#
 	def convert_county2gnis(self, f, m):
 		#csv_reader = csv.reader(f, delimiter='|')
@@ -275,7 +275,7 @@ class AreaMap(collections.UserDict):
 			area = line[0:15]
 			fips_s = line[18:20]
 			fips_c = line[25:28]
-			gnis = m.get(fips_s, fips_c) # TODO exceptions?
+			gnis = m[(fips_s, fips_c)] # TODO exceptions?
 			if gnis is None:
 				logging.warning("No GNIS for area {}".format(area))
 			else:

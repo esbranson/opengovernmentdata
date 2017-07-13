@@ -23,6 +23,7 @@ import rdflib
 import sys
 import getopt
 import logging
+import collections
 
 gnis_ns = rdflib.Namespace("http://data.usgs.gov/id/gnis/")
 gnisonto_ns = rdflib.Namespace('http://data.usgs.gov/ont/gnis#')
@@ -79,9 +80,9 @@ def main():
 		outf = args[2]
 	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
 
-	logging.info("Building FIPSMap")
+	logging.info("Building FIPS2GNISDict")
 	with open(govfn) as f:
-		m = FIPSMap(f)
+		m = FIPS2GNISDict(f)
 
 	logging.info("Creating graph")
 	g = rdflib.Graph()
@@ -100,9 +101,14 @@ def main():
 	g.serialize(outf, format=outfmt)
 
 ##
-# A map (FIPS state numeric, FIPS county numeric) => GNIS ID.
+# A map from (FIPS state numeric, FIPS county numeric) => GNIS ID. The BGN
+# Geographic Names Information System ID is the official geographic name
+# identifier and is a better identifier than FIPS 5-2 codes for states and
+# FIPS 6-4 codes for counties.
 #
-class FIPSMap:
+# TODO Add states.
+#
+class FIPS2GNISDict(collections.UserDict):
 	##
 	# Use BGN "Government Units" file to pre-build map of state/county
 	# FIPS codes -> GNIS IDs.
@@ -110,15 +116,25 @@ class FIPSMap:
 	# @input f: The BGN "Government Units" file.
 	#
 	def __init__(self, f):
-		self.m = {}
+		super().__init__()
 		csv_reader = csv.reader(f, delimiter='|')
 		next(csv_reader)
 		for row in csv_reader:
-			self.add(row[0], row[4], row[2])
-	def add(self, gnisid, fips_sn, fips_cn=''):
-		self.m[(fips_sn, fips_cn)] = gnisid
-	def get(self, fips_sn, fips_cn=''):
-		return (fips_sn, fips_cn) in self.m and self.m[(fips_sn, fips_cn)] or None
+			state = row[4]
+			county = row[2]
+			gnis = row[0]
+			if county == '':
+				county = None
+			self[(state, county)] = gnis
+
+	##
+	# Use like a dictionary, where the key is a tuple (FIPS state, FIPS county),
+	# and where the FIPS county may be None if for a state.
+	#
+	def __getitem__(self, key):
+		if not (isinstance(key, tuple) and len(key) is 2 and isinstance(key[0], str) and (key[1] is None or isinstance(key[1], str))):
+			raise KeyError(key)
+		return super().__getitem__(key)
 
 ##
 # Use BGN "Government Units" file to add states to graph because they aren't included
@@ -146,7 +162,7 @@ def convert_fips2gnis(g, f):
 #
 # @input g: An RDFLib Graph.
 # @input f: The BGN "Government Units" file.
-# @input m: A FIPSMap.
+# @input m: A FIPS2GNISDict.
 #
 def convert_fedcodes(g, f, m):
 	csv_reader = csv.reader(f, delimiter='|')
@@ -176,14 +192,14 @@ def convert_fedcodes(g, f, m):
 		# If its a county equivalent, use county properties and link to encompassing state,
 		# otherwise link to county.
 		if len(row[4]) and (row[4][0] == 'H' or row[4] == 'C7'):
-			state_gnis = m.get(row[7])
+			state_gnis = m[(row[7], None)]
 			g.add((url, geowithin, gnis_ns[state_gnis]))
 			g.add((url, gnisfips6_4, rdflib.Literal(row[10], datatype=rdflib.XSD.string)))
 		else:
-			county_gnis = m.get(row[7], row[10])
+			county_gnis = m[(row[7], row[10])]
 			g.add((url, geowithin, gnis_ns[county_gnis]))
 
-		# XXX: Get geometries from US Census Bureau.
+		# TODO: Get geometries from US Census Bureau.
 		#g.add((furl, geohasgeom, gurl))
 		#g.add((gurl, rdflib.RDF.type, geogeom))
 		#g.add((gurl, geoaswkt, rdflib.Literal('POINT ('+row[13]+' '+row[12]+')', datatype=geowkt)))
