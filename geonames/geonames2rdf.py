@@ -1,21 +1,16 @@
 #!/usr/bin/python3 -u
 
-##
-# geonames2rdf - convert the US BGN "federal codes" dataset into RDF
-#
-
-usage="""
-geonames2rdf - convert the US BGN "federal codes" dataset into RDF
+usage="""geonames2rdf - convert the US BGN "federal codes" dataset into RDF
 
 See <http://geonames.usgs.gov/domestic/download_data.htm> under "Topical
 Gazetteers/Government Units" and "State Files with Federal Codes".
 
-Usage:  geonames2rdf [options] GOVT_UNITS_*.txt NationalFedCodes_*.txt [output]
+Usage:  geonames2rdf [options] GOVT_UNITS_*.txt NationalFedCodes_*.txt
 Arguments:
 
+	-o output	output file (default: stdout)
 	-d			enable debugging
-	-f fmt		use format for output file (see RDFLib documentation)
-	output		output file (default: stdout)
+	-f fmt		use format for output file (default: turtle)
 """
 
 import csv
@@ -56,29 +51,37 @@ def main():
 	outfmt = 'turtle'
 	debuglvl = logging.INFO
 
+	logging.basicConfig(format='{levelname} {funcName}/l{lineno}: {message}', style='{', level=debuglvl)
+
 	try:
-		opts, args = getopt.getopt(sys.argv[1:], 'df:')
+		opts, args = getopt.getopt(sys.argv[1:], 'ho:df:')
 	except getopt.GetoptError as e:
-		logging.fatal('getopt error {}'.format(e))
+		logging.fatal('Getopt error {}'.format(e))
 		return 1
 
-	if len(args) < 2:
-		logging.fatal('need input files')
-		return 1
 	for opt, arg in opts:
-		if opt in {'-d', '--debug'}:
+		if opt in {'-o', '--output'}:
+			outf = arg
+		elif opt in {'-d', '--debug'}:
 			debuglvl = logging.DEBUG
 		elif opt in {'-f', '--format'}:
+			# XXX verify, otherwise die and inform of valid input
 			outfmt = arg
+		elif opt in {'-h', '--help'}:
+			print(usage, file=sys.stderr)
+			return 0
 		else:
-			logging.fatal('invalid flag {}'.format(opt))
+			logging.fatal('Invalid flag {}'.format(opt))
+			print(usage, file=sys.stderr)
 			return 1
+	if len(args) < 2:
+		logging.fatal('Need input files')
+		print(usage, file=sys.stderr)
+		return 1
 
+	logging.getLogger().setLevel(debuglvl)
 	govfn = args[0] # GOVT_UNITS_*.txt
 	codesfn = args[1] # NationalFedCodes_*.txt
-	if len(args) >= 3:
-		outf = args[2]
-	logging.basicConfig(format='{levelname}: {message}', style='{', level=debuglvl)
 
 	logging.info("Building FIPS2GNISDict")
 	with open(govfn) as f:
