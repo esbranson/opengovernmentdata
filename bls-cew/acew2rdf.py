@@ -83,10 +83,9 @@ def main():
 #
 class CEWGraph(StatsGraph):
 	ont_cew = rdflib.Namespace(StatsGraph.prefix + "labor-statistics-bureau/ont/cew#")
-	cew_emplvl = ont_cew['EmplLvlObservation'] # TODO: use rdfs:subPropertyOf
+	cew_emplvl = ont_cew['EmplLvlObservation'] # rdfs:subClassOf qb:Observation
 	#cew_avgwwage = ont_cew['AvgWWageObservation']
 	cew_avgapay = ont_cew['AvgPayObservation']
-	#cew_gnis = ont_cew['gnis']
 	cew_ind = ont_cew['industry']
 	cew_own = ont_cew['ownership']
 	#cew_cur = rdflib.Literal('USD', datatype=rdflib.XSD.string) # ISO 4217
@@ -100,37 +99,50 @@ class CEWGraph(StatsGraph):
 		self.g.bind('cew-ont', self.ont_cew)
 
 	##
-	# Given the CEW area code, return the ID fragment and URL, 
-	# or (None,None) if we're to skip.
-	#
+	# Given the CEW area code, return the ID fragment and URL.
 	# See <https://data.bls.gov/cew/doc/titles/area/area_titles.htm>.
 	#
-	# TODO: Don't skip U series.
+	# TODO What exceptions are possible here?
 	#
-	def convert_area2gnis(self, fips_code, m):
-		# XXX error check None return
-		if fips_code[0] == 'U':
-			area = None
-			aid = None
-		elif fips_code[0:2] == 'CS':
-			area = self.id_csa[fips_code[2:5]]
-			aid = 'csa'+fips_code[2:5]
-		elif fips_code[0] == 'C':
-			area = self.id_cbsa[fips_code[1:5]+'0']
-			aid = 'cbsa'+fips_code[1:5]+'0'
-		elif fips_code[2:5] in {'000','999'}:
-			aid = m[(fips_code[0:2],None)]
+	# @input code: The code representing the area.
+	# @input m: The dictionary that maps FIPS IDs to GNIS IDs.
+	#
+	def decode_area2gnis(self, code, m):
+		assert code is not None and len(code) >= 5
+		if code[0:5] == 'US000':
+			area = self.id_gnis['1890467'] # TODO not sure, maybe use 0
+			aid = 'US000'
+
+		elif code[0:5] == 'USCMS':
+			area = self.id_csa['999']
+			aid = 'USCMS'
+
+		elif code[0:5] == 'USMSA':
+			area = self.id_cbsa['9999']
+			aid = 'USMSA'
+
+		elif code[0:5] == 'USNMS':
+			area = self.id_gnis['1'] # TODO not sure
+			aid = 'USNMS'
+
+		elif code[0:2] == 'CS':
+			area = self.id_csa[code[2:5]]
+			aid = 'csa'+fips[2:5]
+
+		elif code[0] == 'C':
+			area = self.id_cbsa[code[1:5]+'0']
+			aid = 'msa'+fips[1:5]+'0'
+
+		elif code[2:5] in {'000','999'}:
+			aid = m[(code[0:2], None)]
 			area = self.id_gnis[aid]
-			if fips_code[2:5] in {'999'}: # XXX not located within county?
-				aid+='u'
-				#continue # XXX what is an areaRef for this?
+			if code[2:5] in {'999'}: # "Unknown Or Undefined"
+				aid+='u' # XXX what is an areaRef for this?
+
 		else:
-			aid = m[(fips_code[0:2], fips_code[2:5])]
-			if aid is None:
-				logging.warning("({0},{1}) is no state,county".format(fips_code[0:2], fips_code[2:5]))
-				area = None
-			else:
-				area = self.id_gnis[aid]
+			aid = m[(code[0:2], code[2:5])]
+			area = self.id_gnis[aid]
+
 		return area,aid
 
 	##
@@ -144,7 +156,7 @@ class CEWGraph(StatsGraph):
 			if n % 10000 == 0:
 				logging.debug("Processing {0}".format(n))
 
-			fips_code = row[0]
+			area_code = row[0]
 			owner_code = row[1]
 			industry_code = row[2]
 			#agglvl_code = row[3]
@@ -168,7 +180,7 @@ class CEWGraph(StatsGraph):
 			#if industry_code[:2] != '10' and len(industry_code) > 2 and '-' not in industry_code:
 			#	continue
 
-			area,aid = self.convert_area2gnis(fips_code, m)
+			area,aid = self.decode_area2gnis(area_code, m)
 			if area is None or aid is None:
 				continue
 
