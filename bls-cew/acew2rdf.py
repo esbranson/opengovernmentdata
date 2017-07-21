@@ -1,11 +1,11 @@
 #!/usr/bin/python3 -u
 
-usage="""acew2rdf - convert the US BLS Census of Employment and Wages dataset into RDF
+usage="""cew2rdf - convert the US BLS Census of Employment and Wages dataset into RDF
 
 See <https://www.bls.gov/cew/>. Requires python3, python3-rdfllib and 
 python3-bsddb3.
 
-Usage:  geonames2rdf [options] *.annual.singlefile.csv GOVT_UNITS_*.txt
+Usage:  cew2rdf [options] *.singlefile.csv GOVT_UNITS_*.txt
 Arguments:
 
 	-o output	output file (default: stdout)
@@ -18,6 +18,7 @@ import getopt
 import csv
 import sys
 import logging
+import itertools
 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
@@ -63,7 +64,7 @@ def main():
 		return 1
 
 	logging.getLogger().setLevel(debuglvl)
-	singlefn = args[0] # *.annual.singlefile.csv
+	singlefn = args[0] # *.singlefile.csv
 	govfn = args[1] # GOVT_UNITS_*.txt
 
 	logging.info("Building FIPSMap")
@@ -73,7 +74,7 @@ def main():
 	logging.info("Building RDF")
 	with open(singlefn) as f:
 		g = CEWGraph()
-		g.convert_acew(f, m)
+		g.convert_cew(f, m)
 
 	logging.info("Saving RDF")
 	g.serialize(outf, format=outfmt)
@@ -84,7 +85,7 @@ def main():
 class CEWGraph(StatsGraph):
 	ont_cew = rdflib.Namespace(StatsGraph.prefix + "labor-statistics-bureau/ont/cew#")
 	cew_emplvl = ont_cew['EmplLvlObservation'] # rdfs:subClassOf qb:Observation
-	#cew_avgwwage = ont_cew['AvgWWageObservation']
+	cew_avgwwage = ont_cew['AvgWWageObservation']
 	cew_avgapay = ont_cew['AvgPayObservation']
 	cew_ind = ont_cew['industry']
 	cew_own = ont_cew['ownership']
@@ -97,6 +98,27 @@ class CEWGraph(StatsGraph):
 	def __init__(self):
 		super().__init__()
 		self.g.bind('cew-ont', self.ont_cew)
+
+	##
+	# Automatically choose the conversion function (between annual or
+	# quarterly files) based upon number of columns. The length also
+	# differs between individual and single files.
+	#
+	# TODO Throw exception and let driver function deal with it.
+	#
+	def convert_cew(self, f, m):
+		csv_reader = csv.reader(f, doublequote=False)
+		next(csv_reader)
+		peek = next(csv_reader)
+		if len(peek) == 42:
+			logging.info("Assuming single quarterly file")
+			self.convert_qcew(itertools.chain([peek], csv_reader), m)
+		elif len(peek) == 38:
+			logging.info("Assuming single annual file")
+			self.convert_acew(itertools.chain([peek], csv_reader), m)
+		else:
+			logging.info("Unable to determine filetype with length {}".format(len(peek)))
+			return 1
 
 	##
 	# Given the CEW area code, return the ID fragment and URL.
@@ -133,10 +155,7 @@ class CEWGraph(StatsGraph):
 	##
 	#
 	#
-	def convert_acew(self, f, m):
-		csv_reader = csv.reader(f, doublequote=False)
-		next(csv_reader)
-
+	def convert_acew(self, csv_reader, m):
 		for n,row in enumerate(csv_reader, 1):
 			if n % 10000 == 0:
 				logging.debug("Processing {0}".format(n))
@@ -188,6 +207,89 @@ class CEWGraph(StatsGraph):
 			self.g.add((url, self.sdmx_freq, self.sdmx_freqa))
 			self.g.add((url, self.sdmx_time, rdflib.Literal(year, datatype=rdflib.XSD.gYear)))
 			self.g.add((url, self.sdmx_cur, rdflib.Literal(avg_annual_pay, datatype=rdflib.XSD.nonNegativeInteger)))
+
+	##
+	#
+	#
+	def convert_qcew(self, csv_reader, m):
+		for n,row in enumerate(csv_reader, 1):
+			if n % 10000 == 0:
+				logging.debug("Processing {0}".format(n))
+
+			area_code = row[0]
+			owner_code = row[1]
+			industry_code = row[2]
+	#		agglvl_code = row[3]
+	#		size_code = row[4]
+			year = row[5]
+			qtr = row[6]
+			disclosure_code = row[7]
+			qtrly_estabs_count = row[8]
+			month1_emplvl = row[9]
+			month2_emplvl = row[10]
+			month3_emplvl = row[11]
+			total_qtrly_wages = row[12]
+	#		taxable_qtrly_wages = row[13] # XXX ever non-zero?
+	#		qtrly_contributions = row[14] # XXX ever non-zero?
+			avg_wkly_wage = row[15]
+
+			if disclosure_code == 'N':
+				continue
+			if owner_code not in ('0','5'):
+				continue
+			#if industry_code[:2] != '10' and len(industry_code) > 2 and '-' not in industry_code:
+			#	continue
+
+			area = self.decode_area2gnis(area_code, m)
+			if area is None: # XXX this still valid?
+				continue
+
+			if qtr == '1':
+				month1_date = year+'-01'
+				month2_date = year+'-02'
+				month3_date = year+'-03'
+			elif qtr == '2':
+				month1_date = year+'-04'
+				month2_date = year+'-05'
+				month3_date = year+'-06'
+			elif qtr == '3':
+				month1_date = year+'-07'
+				month2_date = year+'-08'
+				month3_date = year+'-09'
+			elif qtr == '4':
+				month1_date = year+'-10'
+				month2_date = year+'-11'
+				month3_date = year+'-12'
+
+			if qtr == '1':
+				qdate = year+'-01'
+			elif qtr == '2':
+				qdate = year+'-04'
+			elif qtr == '3':
+				qdate = year+'-07'
+			elif qtr == '4':
+				qdate = year+'-10'
+
+			for lvl,month in {(month1_emplvl,month1_date), (month2_emplvl,month2_date), (month3_emplvl,month3_date)}:
+				url = self.id_cew['-'.join(['emplvl',area_code,industry_code,owner_code,month])]
+				self.g.add((url, rdflib.RDF.type, self.qb_obs))
+				self.g.add((url, rdflib.RDF.type, self.cew_emplvl))
+				self.g.add((url, self.sdmx_area, area))
+				self.g.add((url, self.cew_ind, self.id_naics_ind[industry_code]))
+				self.g.add((url, self.cew_own, self.id_naics_own[owner_code]))
+				self.g.add((url, self.sdmx_freq, self.sdmx_freqm))
+				self.g.add((url, self.sdmx_time, rdflib.Literal(month, datatype=rdflib.XSD.gYearMonth)))
+				self.g.add((url, self.cew_people, rdflib.Literal(lvl, datatype=rdflib.XSD.nonNegativeInteger)))
+
+			url = self.id_cew['-'.join(['avgwwage',area_code,industry_code,owner_code,qdate])]
+			self.g.add((url, rdflib.RDF.type, self.qb_obs))
+			self.g.add((url, rdflib.RDF.type, self.cew_avgwwage))
+			self.g.add((url, self.sdmx_area, area))
+			self.g.add((url, self.cew_ind, self.id_naics_ind[industry_code]))
+			self.g.add((url, self.cew_own, self.id_naics_own[owner_code]))
+			self.g.add((url, self.sdmx_freq, self.sdmx_freqq))
+			self.g.add((url, self.sdmx_time, rdflib.Literal(qdate, datatype=rdflib.XSD.gYearMonth)))
+			self.g.add((url, self.sdmx_cur, rdflib.Literal(avg_wkly_wage, datatype=rdflib.XSD.integer)))
 
 if __name__ == '__main__':
 	main()
