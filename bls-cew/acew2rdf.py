@@ -106,44 +106,29 @@ class CEWGraph(StatsGraph):
 	#
 	# @input code: The code representing the area.
 	# @input m: The dictionary that maps FIPS IDs to GNIS IDs.
+	# @return: The area URL (or ...?)
 	#
 	def decode_area2gnis(self, code, m):
-		assert code is not None and len(code) >= 5
+		assert code is not None and len(code) >= 5 and m is not None
+
 		if code[0:5] == 'US000':
 			area = self.id_gnis['1890467'] # TODO not sure, maybe use 0
-			aid = 'US000'
-
 		elif code[0:5] == 'USCMS':
 			area = self.id_csa['999']
-			aid = 'USCMS'
-
 		elif code[0:5] == 'USMSA':
 			area = self.id_cbsa['9999']
-			aid = 'USMSA'
-
 		elif code[0:5] == 'USNMS':
 			area = self.id_gnis['1'] # TODO not sure
-			aid = 'USNMS'
-
 		elif code[0:2] == 'CS':
 			area = self.id_csa[code[2:5]]
-			aid = 'csa'+fips[2:5]
-
 		elif code[0] == 'C':
 			area = self.id_cbsa[code[1:5]+'0']
-			aid = 'msa'+fips[1:5]+'0'
-
 		elif code[2:5] in {'000','999'}:
-			aid = m[(code[0:2], None)]
-			area = self.id_gnis[aid]
-			if code[2:5] in {'999'}: # "Unknown Or Undefined"
-				aid+='u' # XXX what is an areaRef for this?
-
+			area = self.id_gnis[m[(code[0:2], None)]] # XXX "Unknown Or Undefined" what is an areaRef for this?
 		else:
-			aid = m[(code[0:2], code[2:5])]
-			area = self.id_gnis[aid]
+			area = self.id_gnis[m[(code[0:2], code[2:5])]]
 
-		return area,aid
+		return area
 
 	##
 	#
@@ -180,11 +165,11 @@ class CEWGraph(StatsGraph):
 			#if industry_code[:2] != '10' and len(industry_code) > 2 and '-' not in industry_code:
 			#	continue
 
-			area,aid = self.decode_area2gnis(area_code, m)
-			if area is None or aid is None:
+			area = self.decode_area2gnis(area_code, m)
+			if area is None: # XXX this still valid?
 				continue
 
-			url = self.id_cew['_'.join(['emplvl',aid,industry_code,owner_code,year])]
+			url = self.id_cew['-'.join(['emplvl',area_code,industry_code,owner_code,year])]
 			self.g.add((url, rdflib.RDF.type, self.qb_obs))
 			self.g.add((url, rdflib.RDF.type, self.cew_emplvl))
 			self.g.add((url, self.sdmx_area, area))
@@ -194,7 +179,7 @@ class CEWGraph(StatsGraph):
 			self.g.add((url, self.sdmx_time, rdflib.Literal(year, datatype=rdflib.XSD.gYear)))
 			self.g.add((url, self.cew_people, rdflib.Literal(annual_avg_emplvl, datatype=rdflib.XSD.nonNegativeInteger)))
 
-			url = self.id_cew['_'.join(['avgapay',aid,industry_code,owner_code,year])]
+			url = self.id_cew['-'.join(['avgapay',area_code,industry_code,owner_code,year])]
 			self.g.add((url, rdflib.RDF.type, self.qb_obs))
 			self.g.add((url, rdflib.RDF.type, self.cew_avgapay))
 			self.g.add((url, self.sdmx_area, area))
