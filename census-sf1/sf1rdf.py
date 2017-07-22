@@ -80,8 +80,8 @@ def main():
 #
 #
 class SF1Graph(StatsGraph):
-	id_sf1 = rdflib.Namespace(StatsGraph.prefix + "census-bureau/id/sf1/2010/")
-	ont_sf1 = rdflib.Namespace(StatsGraph.prefix + "census-bureau/ont/sf1/2010#")
+	id_sf1 = rdflib.Namespace(StatsGraph.prefix + "census-bureau/id/sf1/")
+	ont_sf1 = rdflib.Namespace(StatsGraph.prefix + "census-bureau/ont/sf1#")
 	sf1_code = ont_sf1['code']
 
 	##
@@ -141,11 +141,9 @@ class SF1Graph(StatsGraph):
 			if geo_geocomp != '00':
 				continue
 
-			base_url = 'sf1_2012_'
-			base_dim = 'P01200'
 			for i in range(1,49+1):
-				suffix = '{:02d}'.format(i)
-				url = self.id_sf1[base_url+arean+'_P01200'+suffix]
+				dim = 'P01200' + '{:02d}'.format(i)
+				url = self.id_sf1['-'.join(['sf1','2012',dim,arean])]
 				self.g.add((url, rdflib.RDF.type, self.ont_sf1['CensusObservation']))
 				self.g.add((url, self.sdmx_dimension['refArea'], area))
 				self.g.add((url, self.sdmx_dimension['timePeriod'], rdflib.Literal('2010-04-01', datatype=rdflib.XSD.date)))
