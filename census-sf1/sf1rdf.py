@@ -147,7 +147,7 @@ class SF1Graph(StatsGraph):
 				self.g.add((url, rdflib.RDF.type, self.ont_sf1['CensusObservation']))
 				self.g.add((url, self.sdmx_dimension['refArea'], area))
 				self.g.add((url, self.sdmx_dimension['timePeriod'], rdflib.Literal('2010-04-01', datatype=rdflib.XSD.date)))
-				self.g.add((url, self.ont_sf1['measure'], rdflib.Literal(base_dim+suffix, datatype=rdflib.XSD.string)))
+				self.g.add((url, self.ont_sf1['matrix'], rdflib.Literal(dim, datatype=rdflib.XSD.string)))
 				self.g.add((url, self.ont_sf1['people'], rdflib.Literal(lseg[4+71+73+i], datatype=rdflib.XSD.nonNegativeInteger)))
 
 if __name__ == '__main__':
