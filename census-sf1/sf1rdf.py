@@ -5,7 +5,7 @@ usage="""sf2rdf - convert the US Census Bureau Summary File datasets into RDF
 See <https://www.bls.gov/cew/>. Requires python3, python3-rdfllib and 
 python3-bsddb3.
 
-Usage:  sf2rdf [options] *geo2010.sf1 *000*20*.sf1 [...]
+Usage:  sf2rdf [options] *.sf1.zip
 Arguments:
 
 	-o output	output file (default: stdout)
@@ -18,6 +18,8 @@ import getopt
 import csv
 import sys
 import logging
+import zipfile
+import io
 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
@@ -57,21 +59,19 @@ def main():
 			logging.fatal('Invalid flag {}'.format(opt))
 			print(usage, file=sys.stderr)
 			return 1
-	if len(args) < 2:
+	if len(args) < 1:
 		logging.fatal('Need input files')
 		print(usage, file=sys.stderr)
 		return 1
 
 	logging.getLogger().setLevel(debuglvl)
-	geofn = args[0] # XXgeo2010.sf1
 
 	logging.info("Creating RDF graph")
 	g = SF1Graph()
 
 	logging.info("Building RDF")
-	for segfn in args[1:]: # XX000042010.sf1
-		with open(segfn, errors='replace') as segf, open(geofn, errors='replace') as geof:
-			g.convert_seg4(segf, geof)
+	with zipfile.ZipFile(args[0]) as zipf:
+		g.convert(zipf)
 
 	logging.info("Saving RDF")
 	g.serialize(outf, format=outfmt)
@@ -92,12 +92,21 @@ class SF1Graph(StatsGraph):
 		self.g.bind('sf1-ont', self.ont_sf1)
 
 	##
+	# TODO Assumes year.
+	#
+	def convert(self, zipf, segments=['04']):
+		year = '2010'
+		prefix = zipf.namelist()[0][0:2]
+		for segment,segmentf in map(lambda i: (i, prefix+'000'+i+year+'.sf1'), segments):
+			method = getattr(self, 'convert_seg'+segment)
+			with zipf.open(segmentf) as segf, zipf.open(prefix+'geo'+year+'.sf1') as geof:
+				method(io.TextIOWrapper(geof, errors='replace'), csv.reader(io.TextIOWrapper(segf, errors='replace')))
+
+	##
 	# Only works on segment 4, i.e., <ca000042010.sf1>.
 	#
-	def convert_seg4(self, segf, geof):
-		seg_csv = csv.reader(segf)
-
-		for n,(lgeo,lseg) in enumerate(zip(geof,seg_csv)):
+	def convert_seg04(self, geof, segf):
+		for n,(lgeo,lseg) in enumerate(zip(geof,segf)):
 			if n % 10000 == 0:
 				logging.debug("Processing {0}".format(n))
 
