@@ -178,7 +178,7 @@ class OESGraph(stats.StatsGraph):
 			if datatype is None:
 				continue
 
-			url = self.id_oes['_'.join([series,year,period])]
+			url = self.id_oes['-'.join([series,year,period])]
 			self.g.add((url, rdflib.RDF.type, self.qb_obs))
 			self.g.add((url, self.sdmx_area, areaurl))
 			self.g.add((url, self.oes_series, self.id_oes[series]))
