@@ -12,14 +12,16 @@ import tempfile
 #
 #
 class StatsGraph:
-	id_oes = rdflib.Namespace("http://data.bls.gov/id/oes/")
-	id_gnis = rdflib.Namespace("http://data.usgs.gov/id/gnis/")
-	id_soc = rdflib.Namespace("http://data.omb.gov/id/soc/")
-	id_cbsa = rdflib.Namespace("http://data.omb.gov/id/cbsa/")
-	id_csa = rdflib.Namespace("http://data.omb.gov/id/csa/")
-	id_naics_ind = rdflib.Namespace("http://data.census.gov/id/naics-industry/")
-	id_naics_own = rdflib.Namespace("http://data.cenus.gov/id/naics-ownership/")
-	id_lau = rdflib.Namespace("http://data.bls.gov/id/lau/")
+	prefix = "https://ld.data.gov/"
+	id_gnis = rdflib.Namespace(prefix + "geographic-names-board/id/gnis/")
+	id_oes = rdflib.Namespace(prefix + "labor-statistics-bureau/id/oes/")
+	id_lau = rdflib.Namespace(prefix + "labor-statistics-bureau/id/lau/")
+	id_cew = rdflib.Namespace(prefix + "labor-statistics-bureau/id/cew/")
+	id_soc = rdflib.Namespace(prefix + "management-and-budget-office/id/soc/")
+	id_cbsa = rdflib.Namespace(prefix + "management-and-budget-office/id/cbsa/")
+	id_csa = rdflib.Namespace(prefix + "management-and-budget-office/id/csa/")
+	id_naics_ind = rdflib.Namespace(prefix + "census-bureau/id/naics-industry/")
+	id_naics_own = rdflib.Namespace(prefix + "census-bureau/id/naics-ownership/")
 	qb = rdflib.Namespace("http://purl.org/linked-data/cube#")
 	sdmx_dimension = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/dimension#")
 	sdmx_measure = rdflib.Namespace("http://purl.org/linked-data/sdmx/2009/measure#")
@@ -32,6 +34,8 @@ class StatsGraph:
 	sdmx_time = sdmx_dimension['timePeriod']
 	sdmx_freqa = sdmx_code['freq-A'] # see <http://sdmx.org/docs/1_0/SDMXCommon.xsd> TimePeriodType
 	sdmx_freqm = sdmx_code['freq-M']
+	sdmx_freqw = sdmx_code['freq-W']
+	sdmx_freqq = sdmx_code['freq-Q']
 	sdmx_obs = sdmx_measure['obsValue']
 	sdmx_cur = sdmx_measure['currency']
 	sdmx_adj = sdmx_attribute['adjustDetail']
