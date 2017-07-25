@@ -13,12 +13,10 @@ Usage:  oes2rdf [options] oe.data.1.AllData oe.industry GOVT_UNITS_*.txt
 """
 
 import rdflib
-import rdflib.plugins.sleepycat
 import getopt
 import csv
 import tempfile
 import sys
-import itertools
 import logging
 
 import sys, os
@@ -64,6 +62,7 @@ def main():
 		print(usage, file=sys.stderr)
 		return 1
 
+	logging.getLogger().setLevel(debuglvl)
 	datafn = args[0] # oe.data.0.Current
 	indfn = args[1] # oe.industry
 	govfn = args[2] # GOVT_UNITS_*.txt
@@ -150,6 +149,57 @@ class OESGraph(stats.StatsGraph):
 		self.g.bind('oes-ont', self.ont_oes)
 
 	##
+	# Parse oe.data file and build OESGraph.
+	#
+	# TODO: use NAICS ownership code
+	#
+	def build_data(self, f, gnism, indm):
+		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
+		next(csv_reader)
+
+		for n,row in enumerate(csv_reader, 1):
+			if n % 10000 == 0:
+				logging.debug("Processing {0}".format(n))
+
+			series = row[0].strip()
+			year = row[1].strip()
+			period = row[2].strip()
+			value = row[3].strip()
+			footnotes = row[4].strip()
+
+			# XXX don't know what other periods mean
+			assert period == 'A01'
+
+			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series_id(series, gnism, indm)
+			if datatype is None:
+				continue
+
+			url = self.id_oes['_'.join([series,year,period])]
+			self.g.add((url, rdflib.RDF.type, self.qb_obs))
+			self.g.add((url, self.sdmx_area, areaurl))
+			self.g.add((url, self.oes_series, self.id_oes[series]))
+			self.g.add((url, self.oes_ind, indurl))
+			self.g.add((url, self.oes_own, ownurl))
+			self.g.add((url, self.oes_soc, socurl))
+			self.g.add((url, self.sdmx_freq, self.sdmx_freqa))
+			self.g.add((url, self.sdmx_time, rdflib.Literal(year, datatype=rdflib.XSD.gYear)))
+			if datatype == '01':
+				self.g.add((url, rdflib.RDF.type, self.oes_emp))
+				self.g.add((url, self.oes_people, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
+			elif datatype == '02':
+				self.g.add((url, rdflib.RDF.type, self.oes_empsem))
+				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
+			elif datatype == '04':
+				self.g.add((url, rdflib.RDF.type, self.oes_wagemeana))
+				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
+			elif datatype == '05':
+				self.g.add((url, rdflib.RDF.type, self.oes_wagsem))
+				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
+			elif datatype == '13':
+				self.g.add((url, rdflib.RDF.type, self.oes_wagemeda))
+				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
+
+	##
 	#
 	#
 	@staticmethod
@@ -213,57 +263,6 @@ class OESGraph(stats.StatsGraph):
 			return (None,)*5
 
 		return areaurl,indurl,ownurl,socurl,datatype
-
-	##
-	# Parse oe.data file and build OESGraph.
-	#
-	# TODO: use NAICS ownership code
-	#
-	def build_data(self, f, gnism, indm):
-		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
-		next(csv_reader)
-
-		for n,row in enumerate(csv_reader, 1):
-			if n % 10000 == 0:
-				logging.debug("Processing {0}".format(n))
-
-			series = row[0].strip()
-			year = row[1].strip()
-			period = row[2].strip()
-			value = row[3].strip()
-			footnotes = row[4].strip()
-
-			# XXX don't know what other periods mean
-			assert period == 'A01'
-
-			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series_id(series, gnism, indm)
-			if datatype is None:
-				continue
-
-			url = self.id_oes['_'.join([series,year,period])]
-			self.g.add((url, rdflib.RDF.type, self.qb_obs))
-			self.g.add((url, self.sdmx_area, areaurl))
-			self.g.add((url, self.oes_series, self.id_oes[series]))
-			self.g.add((url, self.oes_ind, indurl))
-			self.g.add((url, self.oes_own, ownurl))
-			self.g.add((url, self.oes_soc, socurl))
-			self.g.add((url, self.sdmx_freq, self.sdmx_freqa))
-			self.g.add((url, self.sdmx_time, rdflib.Literal(year, datatype=rdflib.XSD.gYear)))
-			if datatype == '01':
-				self.g.add((url, rdflib.RDF.type, self.oes_emp))
-				self.g.add((url, self.oes_people, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
-			elif datatype == '02':
-				self.g.add((url, rdflib.RDF.type, self.oes_empsem))
-				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
-			elif datatype == '04':
-				self.g.add((url, rdflib.RDF.type, self.oes_wagemeana))
-				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
-			elif datatype == '05':
-				self.g.add((url, rdflib.RDF.type, self.oes_wagsem))
-				self.g.add((url, self.oes_rse, rdflib.Literal(value, datatype=rdflib.XSD.decimal)))
-			elif datatype == '13':
-				self.g.add((url, rdflib.RDF.type, self.oes_wagemeda))
-				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
 
 if __name__ == '__main__':
 	main()
