@@ -85,6 +85,8 @@ def main():
 ##
 # A map of city names => GNIS ID.
 #
+# TODO Currently only works for counties and most cities and towns.
+#
 class NameMap:
 	##
 	# Use BGN NationalFedCodes file to pre-build map of state/county
@@ -233,7 +235,6 @@ class NameMap:
 # Use like a dictionary, as collections.UserDict manages the access
 # methods such as __getitem__. We only populate the internal dictionary.
 #
-# TODO Currently only works for counties and most cities and towns.
 # TODO Currently only returns GNIS ID URLs.
 #
 class AreaMap(collections.UserDict):
@@ -343,16 +344,10 @@ class LAUGraph(StatsGraph):
 			year = row[1].strip()
 			period = row[2].strip()
 			value = row[3].strip()
-	#		fn = row[4].strip() # footnote_codes
-
 	#		survey = sid[0:2]
 			seas = sid[2] # S=Seasonally Adjusted U=Unadjusted
 			ac = sid[3:18] # area_code
 			meas = sid[18:20] # measure_code
-#			if len(sid) > 13: # XXX what is this????
-#				ex = sid[13:]
-#			else:
-#				ex = ''
 
 			# XXX skip rest for now
 			if ac not in m:
@@ -361,14 +356,6 @@ class LAUGraph(StatsGraph):
 			# XXX not available. footcode 'N'
 			if value == '-':
 				continue
-
-#			# XXX duplicates? XXX what is this????
-#			if len(ex):
-#				continue
-
-			ac_typ = ac[0:2]
-			ac_fips = ac[2:4]
-	#		ac_rest = ac[2:8]
 
 			# date
 			if period == 'M13':
@@ -422,10 +409,6 @@ class LAUGraph(StatsGraph):
 			# seasonality
 			if seas == 'S':
 				self.g.add((url, self.sdmx_adj, self.lau_seas))
-			elif seas == 'U':
-				pass
-			else:
-				logging.warning('Unknown adjustment')
 
 if __name__ == '__main__':
 	main()
