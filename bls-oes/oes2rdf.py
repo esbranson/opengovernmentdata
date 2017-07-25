@@ -18,6 +18,7 @@ import csv
 import tempfile
 import sys
 import logging
+import collections
 
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'geonames'))
@@ -90,9 +91,9 @@ def main():
 #
 # @input f: The oe.industry file.
 #
-class IndustryMap:
+class IndustryMap(collections.UserDict):
 	def __init__(self, f):
-		self.m = {}
+		super().__init__()
 		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
 		next(csv_reader)
 		for row in csv_reader:
@@ -116,11 +117,7 @@ class IndustryMap:
 			else:
 				ind = code[0:lvl]
 				own = '0'
-			self.add((ind,own), code)
-	def add(self, naics, code):
-		self.m[code] = naics
-	def get(self, code):
-		return code in self.m and self.m[code] or None
+			self.data[code] = (ind,own)
 
 ##
 # Represent a OES graph.
