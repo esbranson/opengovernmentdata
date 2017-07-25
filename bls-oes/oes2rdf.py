@@ -68,11 +68,11 @@ def main():
 	indfn = args[1] # oe.industry
 	govfn = args[2] # GOVT_UNITS_*.txt
 
-	logging.info("Building FIPSMap")
+	logging.info("Building FIPS->GNIS dictionary")
 	with open(govfn) as f:
 		gnism = FIPS2GNISDict(f)
 
-	logging.info("Building IndustryMap")
+	logging.info("Building industry->NAICS dictionary")
 	with open(indfn) as f:
 		indm = IndustryMap(f)
 
@@ -148,7 +148,11 @@ class OESGraph(stats.StatsGraph):
 	##
 	# Parse oe.data file and build OESGraph.
 	#
-	# TODO: use NAICS ownership code
+	# TODO: Don't skip any record types.
+	#
+	# @input f: The data file, e.g., <oe.data.0.Current>.
+	# @input gnism: A dictionary mapping FIPS IDs to GNIS IDs, i.e., a FIPS2GNISDict.
+	# @input indm: A dictionary mapping industry codes to NAICS codes, i.e., a IndustryMap.
 	#
 	def build_data(self, f, gnism, indm):
 		csv_reader = csv.reader(f, delimiter='\t', skipinitialspace=True)
@@ -164,10 +168,13 @@ class OESGraph(stats.StatsGraph):
 			value = row[3].strip()
 			footnotes = row[4].strip()
 
-			# XXX don't know what other periods mean
+			# XXX: Don't know what other periods mean.
 			assert period == 'A01'
+			# XXX: Need to remove this.
+			if year != '2016':
+				continue
 
-			areaurl,indurl,ownurl,socurl,datatype = OESGraph.parse_series_id(series, gnism, indm)
+			areaurl,indurl,ownurl,socurl,datatype = self.parse_series_id(series, gnism, indm)
 			if datatype is None:
 				continue
 
@@ -197,31 +204,11 @@ class OESGraph(stats.StatsGraph):
 				self.g.add((url, self.sdmx_cur, rdflib.Literal(value, datatype=rdflib.XSD.nonNegativeInteger)))
 
 	##
-	#
-	#
-	@staticmethod
-	def parse_industry(s, m):
-		ret = m.get(s)
-		if ret is None:
-			return None,None
-		ind,own = ret
-		return stats.StatsGraph.id_naics_ind[ind], stats.StatsGraph.id_naics_own[own]
-
-	##
-	# Return SOC url.
-	#
-	@staticmethod
-	def parse_occupation(s):
-		frag = s[0:2] + '-' + s[2:6]
-		return stats.StatsGraph.id_soc[frag]
-
-	##
 	# Parse the series_id field. Return None if we should skip record.
 	#
-	# TODO: don't skip nonmetropolitan areas
+	# TODO: Don't skip nonmetropolitan areas.
 	#
-	@staticmethod
-	def parse_series_id(s, gnism, indm):
+	def parse_series_id(self, s, gnism, indm):
 		survey = s[0:2]
 		seasonal = s[2:3]
 		areatye = s[3:4]
@@ -236,28 +223,20 @@ class OESGraph(stats.StatsGraph):
 			return (None,)*5
 
 		if area == '0000000':
-			areaurl = gnis['1890467']
+			areaurl = self.id_gnis['1890467']
 		elif area[0:2] != '00' and area[2:7] == '00000':
-			ret = gnism[(area[0:2], None)]
-			if ret is None:
-				logging.critical("FIPSMap returned None for state {0}".format(area[0:2]))
-				ret = '-1'
-			areaurl = gnis[ret]
+			areaurl = self.id_gnis[gnism[(area[0:2], None)]]
 		elif area[0:2] != '00' and area[2:7] != '00000':
-			#logging.debug("skipping record: nonmetro area {0}".format(area))
+			# TODO
+			logging.debug("skipping record: nonmetro area {0}".format(area))
 			return (None,)*5
 		else:
-			areaurl = stats.StatsGraph.id_cbsa[area[2:7]]
+			areaurl = self.id_cbsa[area[2:7]]
 
-		(indurl,ownurl) = OESGraph.parse_industry(industry, indm)
-		if indurl is None:
-			#logging.debug("skipping record: industry_code {0}".format(industry))
-			return (None,)*5
-
-		socurl = OESGraph.parse_occupation(occupation)
-		if socurl is None:
-			logging.warning("skipping record: occupation_code {0}".format(occupation))
-			return (None,)*5
+		ind,own = indm[industry]
+		indurl = self.id_naics_ind[ind]
+		ownurl = self.id_naics_own[own]
+		socurl = self.id_soc[s[0:2]+'-'+s[2:6]]
 
 		return areaurl,indurl,ownurl,socurl,datatype
 
